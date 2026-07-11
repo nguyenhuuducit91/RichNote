@@ -15,10 +15,10 @@
     "email": "nguyenhuuduc.it.91@gmail.com"
   },
   "license": "MIT",
-  "homepage": "https://github.com/YOUR_GITHUB_USERNAME/richnote",
+  "homepage": "https://github.com/nguyenhuuducit91/RichNote",
   "repository": {
     "type": "git",
-    "url": "https://github.com/YOUR_GITHUB_USERNAME/richnote.git"
+    "url": "https://github.com/nguyenhuuducit91/RichNote.git"
   },
   "private": false,
   "scripts": {

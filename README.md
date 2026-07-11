@@ -43,29 +43,12 @@ Standard Notes loads editors from a URL, so the fastest way is to use the hosted
 2. Paste this link and confirm:
 
    ```
-   https://YOUR_GITHUB_USERNAME.github.io/richnote/ext.json
+   https://nguyenhuuducit91.github.io/RichNote/ext.json
    ```
 
 3. Open any note → click the **editor switcher** → choose **RichNote**. Done! 🎉
 
 > Custom editors may require a Standard Notes plan that supports extensions, or the self‑hosted / desktop app.
-
-### Prefer to host it yourself? (free, no server needed)
-
-You don't need your own server — **GitHub Pages** hosts static files over HTTPS for free:
-
-1. **Fork / create** a repo, e.g. `richnote`, and push these files.
-2. In the repo: **Settings → Pages → Build from branch → `main` / root → Save.**
-3. Your files are now live at `https://<username>.github.io/richnote/`.
-4. Edit [`ext.json`](ext.json) — set `url` to `…/index.html` and `latest_url` to `…/ext.json` (replace `YOUR_GITHUB_USERNAME`).
-5. Import the `ext.json` URL in Standard Notes (step 2 above).
-
-> ⚠️ Standard Notes runs over **HTTPS**, so the editor must be HTTPS too. GitHub Pages is HTTPS out of the box — `http://localhost` will be blocked by the web app (use the desktop app for local testing).
-
-> **App icon:** the editor ships a custom icon via `dock_icon` (SVG) in [`ext.json`](ext.json). If your Standard Notes version doesn't render the SVG, replace the `dock_icon` block with the native circle style:
-> ```json
-> "dock_icon": { "type": "circle", "background_color": "#2f6fdb", "foreground_color": "#ffffff", "border_color": "#2f6fdb" }
-> ```
 
 ---
 
@@ -107,14 +90,14 @@ You can also support by ⭐ **starring the repo** and sharing it with fellow Sta
 - 📧 Email: [nguyenhuuduc.it.91@gmail.com](mailto:nguyenhuuduc.it.91@gmail.com)
 - 📱 Phone/Zalo: **0964 589 910**
 
-Found a bug or have an idea? [Open an issue](https://github.com/YOUR_GITHUB_USERNAME/richnote/issues) or reach out — feedback is always welcome.
+Found a bug or have an idea? [Open an issue](https://github.com/nguyenhuuducit91/RichNote/issues) or reach out — feedback is always welcome.
 
 ---
 
 ## 🗂️ Project structure
 
 ```
-richnote/
+RichNote/
 ├── ext.json                  # Standard Notes component manifest
 ├── index.html                # Editor page (menu, toolbar, WYSIWYG area)
 ├── styles/editor.css         # All styling (light theme, toolbar, dialogs)
@@ -127,13 +110,6 @@ richnote/
 ## 🛠️ Tech
 
 Plain **HTML / CSS / JavaScript** — no framework, no build. Formatting is powered by the browser's `contenteditable` and the official [`@standardnotes/component-relay`](https://www.npmjs.com/package/@standardnotes/component-relay) bridge for reading/saving the note.
-
-Run locally (desktop app):
-
-```bash
-npm start           # serves at http://localhost:8080
-# or: python3 -m http.server 8080
-```
 
 ---
 
