@@ -397,8 +397,10 @@ html, body {
 .about-section { margin-top: 16px; }
 .about-h3 { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
 .about-list { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
-.about-list li { display: flex; gap: 10px; padding: 3px 0; }
+.about-list li { display: flex; gap: 10px; padding: 3px 0; min-width: 0; }
 .about-key { flex: 0 0 76px; color: var(--np-gutter-fg); }
+/* Let long values (e.g. the GitHub URL) wrap instead of forcing a horizontal scroll */
+.about-list li > a, .about-list li > span:not(.about-key) { min-width: 0; overflow-wrap: anywhere; }
 .about-list a { color: var(--np-accent); text-decoration: none; }
 .about-list a:hover { text-decoration: underline; }
 
@@ -744,6 +746,10 @@ html, body {
   .statusbar { gap: 8px; padding: 3px 8px; }
   .st-name { max-width: 32%; }
   #st-sel, #st-len { display: none; }          /* keep Ln/Col + mode; drop the rest */
+
+  /* Compact line-number gutter: narrower, smaller and lighter (width set in JS) */
+  .gutter { font-size: 11px; }
+  .gutter .ln { font-size: 11px; left: 2px; right: 3px; opacity: .85; }
 
   /* Find bar spans the width instead of a fixed 180px input */
   .mc-find {

@@ -167,7 +167,9 @@
     }
     gutterInner.innerHTML = html;
     gutterInner.style.height = editor.scrollHeight + 'px';
-    gutter.style.width = 'calc(' + String(lines.length).length + 'ch + 22px)';
+    // Compact gutter on mobile: narrower padding so line numbers take less width
+    var gutterPad = (window.matchMedia && window.matchMedia('(max-width: 640px)').matches) ? 8 : 22;
+    gutter.style.width = 'calc(' + String(lines.length).length + 'ch + ' + gutterPad + 'px)';
     gutter.scrollTop = editor.scrollTop;
   }
 
