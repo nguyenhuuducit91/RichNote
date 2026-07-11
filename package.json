@@ -1,0 +1,27 @@
+{
+  "name": "richnote",
+  "version": "1.0.0",
+  "description": "A beautiful WYSIWYG rich-text editor for Standard Notes (light theme, Word-like toolbar, line numbers, shortcuts).",
+  "keywords": [
+    "standard-notes",
+    "standardnotes",
+    "editor",
+    "wysiwyg",
+    "rich-text",
+    "component"
+  ],
+  "author": {
+    "name": "Nguyen Huu Duc",
+    "email": "nguyenhuuduc.it.91@gmail.com"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/YOUR_GITHUB_USERNAME/richnote",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_GITHUB_USERNAME/richnote.git"
+  },
+  "private": false,
+  "scripts": {
+    "start": "npx --yes http-server . -p 8080 -c-1 --cors"
+  }
+}

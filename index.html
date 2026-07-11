@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RichNote</title>
+  <link rel="stylesheet" href="styles/editor.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <!-- Menu bar -->
+    <div class="menubar" id="menubar">
+      <div class="menu" data-menu="edit">
+        <button class="menu-title" type="button">Edit</button>
+        <div class="menu-dropdown">
+          <button class="menu-item" type="button" data-cmd="undo"><span class="menu-check"></span><span class="menu-label">Undo</span><span class="menu-key">Ctrl+Z</span></button>
+          <button class="menu-item" type="button" data-cmd="redo"><span class="menu-check"></span><span class="menu-label">Redo</span><span class="menu-key">Ctrl+Y</span></button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" type="button" data-cmd="cut"><span class="menu-check"></span><span class="menu-label">Cut</span><span class="menu-key">Ctrl+X</span></button>
+          <button class="menu-item" type="button" data-cmd="copy"><span class="menu-check"></span><span class="menu-label">Copy</span><span class="menu-key">Ctrl+C</span></button>
+          <button class="menu-item" type="button" data-cmd="paste"><span class="menu-check"></span><span class="menu-label">Paste</span><span class="menu-key">Ctrl+V</span></button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" type="button" data-cmd="selectAll"><span class="menu-check"></span><span class="menu-label">Select All</span><span class="menu-key">Ctrl+A</span></button>
+        </div>
+      </div>
+
+      <div class="menu" data-menu="format">
+        <button class="menu-title" type="button">Format</button>
+        <div class="menu-dropdown">
+          <button class="menu-item" type="button" data-cmd="bold"><span class="menu-check"></span><span class="menu-label">Bold</span><span class="menu-key">Ctrl+B</span></button>
+          <button class="menu-item" type="button" data-cmd="italic"><span class="menu-check"></span><span class="menu-label">Italic</span><span class="menu-key">Ctrl+I</span></button>
+          <button class="menu-item" type="button" data-cmd="underline"><span class="menu-check"></span><span class="menu-label">Underline</span><span class="menu-key">Ctrl+U</span></button>
+          <button class="menu-item" type="button" data-cmd="strike"><span class="menu-check"></span><span class="menu-label">Strikethrough</span><span class="menu-key">Ctrl+Shift+X</span></button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" type="button" data-cmd="h1"><span class="menu-check"></span><span class="menu-label">Heading 1</span><span class="menu-key">Ctrl+Alt+1</span></button>
+          <button class="menu-item" type="button" data-cmd="h2"><span class="menu-check"></span><span class="menu-label">Heading 2</span><span class="menu-key">Ctrl+Alt+2</span></button>
+          <button class="menu-item" type="button" data-cmd="h3"><span class="menu-check"></span><span class="menu-label">Heading 3</span><span class="menu-key">Ctrl+Alt+3</span></button>
+          <button class="menu-item" type="button" data-cmd="h4"><span class="menu-check"></span><span class="menu-label">Heading 4</span><span class="menu-key">Ctrl+Alt+4</span></button>
+          <button class="menu-item" type="button" data-cmd="h5"><span class="menu-check"></span><span class="menu-label">Heading 5</span><span class="menu-key">Ctrl+Alt+5</span></button>
+          <button class="menu-item" type="button" data-cmd="h6"><span class="menu-check"></span><span class="menu-label">Heading 6</span><span class="menu-key">Ctrl+Alt+6</span></button>
+          <button class="menu-item" type="button" data-cmd="p"><span class="menu-check"></span><span class="menu-label">Normal text</span><span class="menu-key">Ctrl+Alt+0</span></button>
+          <button class="menu-item" type="button" data-cmd="quote"><span class="menu-check"></span><span class="menu-label">Quote</span><span class="menu-key"></span></button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" type="button" data-cmd="left"><span class="menu-check"></span><span class="menu-label">Align left</span><span class="menu-key">Ctrl+L</span></button>
+          <button class="menu-item" type="button" data-cmd="center"><span class="menu-check"></span><span class="menu-label">Align center</span><span class="menu-key">Ctrl+E</span></button>
+          <button class="menu-item" type="button" data-cmd="right"><span class="menu-check"></span><span class="menu-label">Align right</span><span class="menu-key">Ctrl+R</span></button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" type="button" data-cmd="clear"><span class="menu-check"></span><span class="menu-label">Clear formatting</span><span class="menu-key">Ctrl+\</span></button>
+        </div>
+      </div>
+
+      <div class="menu" data-menu="insert">
+        <button class="menu-title" type="button">Insert</button>
+        <div class="menu-dropdown">
+          <button class="menu-item" type="button" data-cmd="link"><span class="menu-check"></span><span class="menu-label">Link…</span><span class="menu-key">Ctrl+K</span></button>
+          <button class="menu-item" type="button" data-cmd="ul"><span class="menu-check"></span><span class="menu-label">Bulleted list</span><span class="menu-key">Ctrl+Shift+8</span></button>
+          <button class="menu-item" type="button" data-cmd="ol"><span class="menu-check"></span><span class="menu-label">Numbered list</span><span class="menu-key">Ctrl+Shift+7</span></button>
+        </div>
+      </div>
+
+      <div class="menu" data-menu="view">
+        <button class="menu-title" type="button">View</button>
+        <div class="menu-dropdown">
+          <button class="menu-item" type="button" data-cmd="wrap" id="wrapItem"><span class="menu-check">✓</span><span class="menu-label">Word Wrap</span><span class="menu-key"></span></button>
+        </div>
+      </div>
+
+      <div class="menu" data-menu="help">
+        <button class="menu-title" type="button">Help</button>
+        <div class="menu-dropdown">
+          <button class="menu-item" type="button" data-cmd="donate"><span class="menu-check">♥</span><span class="menu-label">Support / Donate</span><span class="menu-key"></span></button>
+          <button class="menu-item" type="button" data-cmd="about"><span class="menu-check"></span><span class="menu-label">About RichNote</span><span class="menu-key"></span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formatting toolbar -->
+    <div class="toolbar" id="toolbar">
+
+      <div class="tgroup">
+        <button class="tbtn" data-cmd="undo" title="Undo (Ctrl+Z)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M4 7h6a3.5 3.5 0 1 1 0 7H6"/><path d="M6.5 4.5 4 7l2.5 2.5"/></svg>
+        </button>
+        <button class="tbtn" data-cmd="redo" title="Redo (Ctrl+Y)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M12 7H6a3.5 3.5 0 1 0 0 7h4"/><path d="M9.5 4.5 12 7 9.5 9.5"/></svg>
+        </button>
+      </div>
+      <span class="tsep"></span>
+
+      <div class="tgroup">
+        <select class="tsel tsel-style" id="styleSelect" title="Paragraph style">
+          <option value="P">Normal text</option>
+          <option value="H1">Heading 1</option>
+          <option value="H2">Heading 2</option>
+          <option value="H3">Heading 3</option>
+          <option value="H4">Heading 4</option>
+          <option value="H5">Heading 5</option>
+          <option value="H6">Heading 6</option>
+          <option value="BLOCKQUOTE">Quote</option>
+        </select>
+        <select class="tsel" id="fontSelect" title="Font">
+          <option value="" disabled>Font</option>
+          <option value="-apple-system, 'Segoe UI', Roboto, sans-serif">Sans-serif</option>
+          <option value="Georgia, 'Times New Roman', serif">Serif</option>
+          <option value="'Consolas','JetBrains Mono',monospace" selected>Monospace</option>
+          <option value="Arial, sans-serif">Arial</option>
+          <option value="'Times New Roman', serif">Times New Roman</option>
+          <option value="'Courier New', monospace">Courier New</option>
+          <option value="'Comic Sans MS', cursive">Comic Sans</option>
+        </select>
+        <select class="tsel tsel-sm" id="sizeSelect" title="Font size">
+          <option value="" disabled>Size</option>
+          <option value="12" selected>12</option>
+          <option value="14">14</option>
+          <option value="16">16</option>
+          <option value="18">18</option>
+          <option value="20">20</option>
+          <option value="24">24</option>
+          <option value="28">28</option>
+          <option value="32">32</option>
+        </select>
+      </div>
+      <span class="tsep"></span>
+
+      <div class="tgroup">
+        <button class="tbtn" data-cmd="bold"      title="Bold (Ctrl+B)"><b>B</b></button>
+        <button class="tbtn" data-cmd="italic"    title="Italic (Ctrl+I)"><i>I</i></button>
+        <button class="tbtn" data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+        <button class="tbtn" data-cmd="strike"    title="Strikethrough (Ctrl+Shift+X)"><s>S</s></button>
+        <button class="tbtn" data-cmd="code"      title="Code (Ctrl+Shift+C)">&lt;/&gt;</button>
+      </div>
+      <span class="tsep"></span>
+
+      <div class="tgroup">
+        <div class="tcolor-wrap">
+          <button class="tcolor" type="button" data-color="fore" title="Text color">
+            <span class="tcolor-ico">A</span>
+            <span class="tcolor-bar" id="foreBar"></span>
+          </button>
+          <div class="color-pop" data-pop="fore">
+            <div class="color-grid"></div>
+            <label class="color-custom">
+              <span class="color-dot rainbow"></span><span>Custom color…</span>
+              <input type="color" value="#e11d48" />
+            </label>
+          </div>
+        </div>
+        <div class="tcolor-wrap">
+          <button class="tcolor" type="button" data-color="back" title="Highlight color">
+            <span class="tcolor-ico tcolor-ico-hl">A</span>
+            <span class="tcolor-bar" id="backBar"></span>
+          </button>
+          <div class="color-pop" data-pop="back">
+            <button class="color-none" type="button"><span class="color-dot none"></span>No fill</button>
+            <div class="color-grid"></div>
+            <label class="color-custom">
+              <span class="color-dot rainbow"></span><span>Custom color…</span>
+              <input type="color" value="#fde047" />
+            </label>
+          </div>
+        </div>
+      </div>
+      <span class="tsep"></span>
+
+      <div class="tgroup">
+        <button class="tbtn" data-cmd="left"   title="Align left (Ctrl+L)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h12"/></svg>
+        </button>
+        <button class="tbtn" data-cmd="center" title="Align center (Ctrl+E)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M4 8h8M2 12h12"/></svg>
+        </button>
+        <button class="tbtn" data-cmd="right"  title="Align right (Ctrl+R)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M6 8h8M2 12h12"/></svg>
+        </button>
+      </div>
+      <span class="tsep"></span>
+
+      <div class="tgroup">
+        <button class="tbtn" data-cmd="ul" title="Bulleted list (Ctrl+Shift+8)">
+          <svg class="ico" viewBox="0 0 16 16"><circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/></svg>
+        </button>
+        <button class="tbtn" data-cmd="ol" title="Numbered list (Ctrl+Shift+7)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text></svg>
+        </button>
+        <button class="tbtn" data-cmd="outdent" title="Decrease indent (Shift+Tab)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M7 8h7M2 12h12"/><path class="fill" d="M4.8 6 2.3 8l2.5 2z"/></svg>
+        </button>
+        <button class="tbtn" data-cmd="indent" title="Increase indent (Tab)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M7 8h7M2 12h12"/><path class="fill" d="M2.3 6 4.8 8l-2.5 2z"/></svg>
+        </button>
+        <div class="link-wrap">
+          <button class="tbtn" data-cmd="link" title="Link (Ctrl+K)">
+            <svg class="ico" viewBox="0 0 16 16"><path d="M6.8 9.2a2.6 2.6 0 0 1 0-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.1 1.1"/><path d="M9.2 6.8a2.6 2.6 0 0 1 0 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6-3.6l1.1-1.1"/></svg>
+          </button>
+          <div class="link-pop" id="linkPop">
+            <div class="link-row">
+              <span class="link-ico">🔗</span>
+              <input type="url" id="linkInput" class="link-input" placeholder="https://..." />
+            </div>
+            <div class="link-actions">
+              <button type="button" class="link-btn link-remove" id="linkRemove">Remove link</button>
+              <button type="button" class="link-btn link-apply" id="linkApply">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <span class="tsep"></span>
+
+      <div class="tgroup">
+        <button class="tbtn" data-cmd="clear" title="Clear formatting (Ctrl+\)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M3 13.2h9"/><path d="M8.7 3.1l4.2 4.2a1 1 0 0 1 0 1.4l-3.3 3.3H6.3L2.7 8.4a1 1 0 0 1 0-1.4l4.6-4.6a1 1 0 0 1 1.4 0z"/><path d="M6 5.8l4.2 4.2"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Editor: line-number gutter + WYSIWYG area -->
+    <div class="editor-area">
+      <div class="gutter" id="gutter" aria-hidden="true"><div class="gutter-inner" id="gutterInner"></div></div>
+      <div id="editor" class="doc" contenteditable="true" spellcheck="false"></div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="statusbar">
+      <span class="st-item st-name" id="st-name">Note</span>
+      <span class="st-spacer"></span>
+      <span class="st-item" id="st-pos">Ln : 1&nbsp;&nbsp;Col : 1</span>
+      <span class="st-item" id="st-sel"></span>
+      <span class="st-item" id="st-len">length : 0&nbsp;&nbsp;lines : 1</span>
+      <span class="st-item st-mode">RTF</span>
+    </div>
+  </div>
+
+  <!-- About / Donate dialog -->
+  <div class="modal-backdrop" id="aboutModal" aria-hidden="true">
+    <div class="modal" role="dialog" aria-label="About RichNote">
+      <button class="modal-close" id="aboutClose" type="button" aria-label="Close">&times;</button>
+
+      <div class="about-head">
+        <div class="about-logo"><img src="Images/icon.svg" alt="RichNote" /></div>
+        <div>
+          <h2 class="about-title">RichNote</h2>
+          <p class="about-tagline">A beautiful WYSIWYG editor for Standard Notes</p>
+        </div>
+      </div>
+
+      <div class="about-section">
+        <h3 class="about-h3">Author</h3>
+        <ul class="about-list">
+          <li><span class="about-key">Name</span><span>Nguyễn Hữu Đức</span></li>
+          <li><span class="about-key">Company</span><span>VIETIS</span></li>
+          <li><span class="about-key">Email</span><a href="mailto:nguyenhuuduc.it.91@gmail.com">nguyenhuuduc.it.91@gmail.com</a></li>
+          <li><span class="about-key">Phone</span><a href="tel:0964589910">0964&nbsp;589&nbsp;910</a></li>
+        </ul>
+      </div>
+
+      <div class="about-section about-donate">
+        <h3 class="about-h3">♥ Support the developer</h3>
+        <p class="about-donate-text">If RichNote makes your notes nicer, a small coffee keeps it improving. Thank you! 🙏</p>
+        <img class="about-qr" src="Images/QR%20Code%20bank%20donate.png" alt="Bank donate QR code"
+             onerror="this.style.display='none'" />
+      </div>
+
+      <p class="about-foot">MIT License · Made with ♥ in Vietnam</p>
+    </div>
+  </div>
+
+  <script src="vendor/component-relay.js"></script>
+  <script src="js/editor.js"></script>
+</body>
+</html>

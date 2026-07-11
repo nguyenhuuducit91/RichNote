@@ -1,0 +1,22 @@
+{
+  "identifier": "com.vietis.richnote",
+  "name": "RichNote",
+  "content_type": "SN|Component",
+  "area": "editor-editor",
+  "version": "1.0.0",
+  "description": "A beautiful, fast WYSIWYG rich-text editor for Standard Notes — live formatting, a Word-like toolbar, headings H1–H6, text & highlight colors, line numbers, current-line highlight, keyboard shortcuts and Word Wrap. Light theme.",
+  "url": "https://YOUR_GITHUB_USERNAME.github.io/richnote/index.html",
+  "latest_url": "https://YOUR_GITHUB_USERNAME.github.io/richnote/ext.json",
+  "download_url": "https://YOUR_GITHUB_USERNAME.github.io/richnote/index.html",
+  "marketing_url": "https://github.com/YOUR_GITHUB_USERNAME/richnote",
+  "thumbnail_url": "https://YOUR_GITHUB_USERNAME.github.io/richnote/Images/icon.png",
+  "dock_icon": {
+    "type": "svg",
+    "source": "https://YOUR_GITHUB_USERNAME.github.io/richnote/Images/icon.svg",
+    "background_color": "#2f6fdb",
+    "foreground_color": "#ffffff",
+    "border_color": "#2f6fdb"
+  },
+  "author": "Nguyen Huu Duc",
+  "flags": ["catalog"]
+}
