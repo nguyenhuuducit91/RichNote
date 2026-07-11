@@ -165,13 +165,34 @@
   /* ---------- Editing across every caret ---------- */
   // Run `fn(sel)` once per caret (document order, LAST → FIRST so earlier ranges stay
   // valid), driving the native selection so execCommand / modify apply to that caret.
+  // A DOM Range has no direction, but a selection does (anchor vs focus). We remember
+  // it on the range object (_backward) so that extending LEFT/HOME keeps growing the
+  // selection instead of collapsing it on the next keystroke.
+  function selectionIsBackward() {
+    if (!sel.rangeCount || sel.isCollapsed || !sel.anchorNode || !sel.focusNode) return false;
+    if (sel.anchorNode === sel.focusNode) return sel.anchorOffset > sel.focusOffset;
+    return !!(sel.anchorNode.compareDocumentPosition(sel.focusNode) & Node.DOCUMENT_POSITION_PRECEDING);
+  }
+  function applyCaretToSelection(r) {
+    sel.removeAllRanges();
+    if (!r.collapsed && r._backward) {
+      try { sel.setBaseAndExtent(r.endContainer, r.endOffset, r.startContainer, r.startOffset); return; }
+      catch (e) {}
+    }
+    sel.addRange(r);
+  }
+  function captureSelectionRange() {
+    var r = sel.getRangeAt(0).cloneRange();
+    r._backward = selectionIsBackward();
+    return r;
+  }
+
   function eachCaret(fn) {
     sortCarets();
     for (var i = carets.length - 1; i >= 0; i--) {
-      sel.removeAllRanges();
-      sel.addRange(carets[i]);
+      applyCaretToSelection(carets[i]);
       fn(sel, i);
-      if (sel.rangeCount) carets[i] = sel.getRangeAt(0).cloneRange();
+      if (sel.rangeCount) carets[i] = captureSelectionRange();
     }
   }
 
