@@ -238,7 +238,7 @@
       <div class="about-head">
         <div class="about-logo"><img src="Images/icon.svg" alt="RichNote" /></div>
         <div>
-          <h2 class="about-title">RichNote</h2>
+          <h2 class="about-title">RichNote <span class="about-ver" id="aboutVer">v1.1.0</span></h2>
           <p class="about-tagline">A beautiful WYSIWYG editor for Standard Notes</p>
         </div>
       </div>
@@ -257,8 +257,18 @@
       <div class="about-section about-donate">
         <h3 class="about-h3">♥ Support the developer</h3>
         <p class="about-donate-text">If RichNote makes your notes nicer, a small coffee keeps it improving. Thank you! 🙏</p>
-        <img class="about-qr" src="Images/QR%20Code%20bank%20donate.png" alt="Bank donate QR code"
-             onerror="this.style.display='none'" />
+        <div class="about-qr-row">
+          <figure class="about-qr-item">
+            <img class="about-qr" src="Images/QR%20Code%20bank%20donate.png" alt="Bank donate QR code"
+                 onerror="this.closest('.about-qr-item').style.display='none'" />
+            <figcaption class="about-qr-cap">Bank</figcaption>
+          </figure>
+          <figure class="about-qr-item">
+            <img class="about-qr" src="Images/paypal.png" alt="PayPal donate QR code"
+                 onerror="this.closest('.about-qr-item').style.display='none'" />
+            <figcaption class="about-qr-cap">PayPal</figcaption>
+          </figure>
+        </div>
       </div>
 
       <p class="about-foot">MIT License · Made with ♥ in Vietnam</p>

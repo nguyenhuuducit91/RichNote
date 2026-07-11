@@ -79,7 +79,12 @@ RichNote is **free and open‑source**. If it makes your notes nicer, please con
 
 <div align="center">
 
-<img src="Images/QR%20Code%20bank%20donate.png" alt="Bank donate QR code" width="240" />
+<table>
+<tr>
+<td align="center"><img src="Images/QR%20Code%20bank%20donate.png" alt="Bank donate QR code" width="200" /><br/><b>Bank</b></td>
+<td align="center"><img src="Images/paypal.png" alt="PayPal donate QR code" width="200" /><br/><b>PayPal</b></td>
+</tr>
+</table>
 
 **Scan to donate** · Nguyễn Hữu Đức
 
