@@ -750,7 +750,16 @@
   }
 
   /* ---------- Startup ---------- */
-  try { wrapOn = localStorage.getItem('richnote-wrap') === '1'; } catch (e) {}
+  // Word Wrap: honor a saved preference; otherwise default it ON for mobile-width
+  // screens (long lines wrap instead of scrolling horizontally) and OFF on desktop.
+  try {
+    var savedWrap = localStorage.getItem('richnote-wrap');
+    if (savedWrap === null) {
+      wrapOn = !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
+    } else {
+      wrapOn = savedWrap === '1';
+    }
+  } catch (e) {}
   editor.classList.toggle('wrap', wrapOn);
   try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
   ensureContent();
