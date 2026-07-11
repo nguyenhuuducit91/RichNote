@@ -23,6 +23,7 @@
   "private": false,
   "scripts": {
     "start": "npx --yes http-server . -p 8080 -c-1 --cors",
-    "build": "rm -f RichNote.zip && zip -r RichNote.zip index.html ext.json styles js vendor Images LICENSE -x '*/.DS_Store' '*/.*'"
+    "version:stamp": "node scripts/stamp-version.mjs",
+    "build": "npm run version:stamp && rm -f RichNote.zip && zip -r RichNote.zip index.html ext.json styles js vendor Images LICENSE -x '*/.DS_Store' '*/.*'"
   }
 }
