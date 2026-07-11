@@ -129,6 +129,19 @@ html, body {
   visibility: hidden;
 }
 .menu-item.checked .menu-check { visibility: visible; }
+/* Leading icon for each menu item */
+.menu-ico {
+  flex: 0 0 auto;
+  width: 18px;
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--np-gutter-fg);
+}
+.menu-ico .ico { width: 15px; height: 15px; }
+.menu-ico-txt { font: 700 12px var(--np-ui-font); line-height: 1; }
+.menu-item:hover .menu-ico { color: var(--np-accent); }
 .menu-label { flex: 1 1 auto; }
 .menu-key {
   margin-left: 24px;
@@ -348,6 +361,12 @@ html, body {
   position: relative;
   z-index: 1;
 }
+/* The swatch matching the caret's current colour */
+.color-swatch.selected {
+  box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px var(--np-accent);
+  position: relative;
+  z-index: 1;
+}
 .color-dot {
   width: 14px;
   height: 14px;
@@ -403,7 +422,9 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(16, 24, 40, 0.45);
+  background: rgba(16, 24, 40, 0.5);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
   align-items: center;
   justify-content: center;
   padding: 20px;
@@ -412,84 +433,171 @@ html, body {
 .modal {
   position: relative;
   width: 100%;
-  max-width: 380px;
-  max-height: 90vh;
+  max-width: 396px;
+  max-height: 92vh;
   overflow-y: auto;
   background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 24px 60px rgba(16, 24, 40, 0.35);
+  border-radius: 16px;
+  box-shadow: 0 30px 70px rgba(16, 24, 40, 0.4);
   padding: 22px 22px 16px;
   font-family: var(--np-ui-font);
   color: var(--np-fg);
+  animation: modal-in 200ms cubic-bezier(.2,.8,.25,1);
+}
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to   { opacity: 1; transform: none; }
 }
 .modal-close {
   position: absolute;
-  top: 10px;
+  top: 12px;
   right: 12px;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
   color: var(--np-gutter-fg);
   font-size: 22px;
   line-height: 1;
   cursor: pointer;
+  z-index: 2;
+  transition: background 120ms ease, color 120ms ease;
 }
 .modal-close:hover { background: var(--tb-hover); color: var(--np-fg); }
 
-.about-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-.about-logo { width: 48px; height: 48px; flex: 0 0 auto; }
+/* ---- About dialog ---- */
+.about-modal { padding: 0; overflow: hidden auto; }
+.about-modal .modal-close { color: rgba(255, 255, 255, .8); }
+.about-modal .modal-close:hover { background: rgba(255, 255, 255, .22); color: #fff; }
+
+.about-hero {
+  position: relative;
+  text-align: center;
+  padding: 28px 22px 22px;
+  color: #fff;
+  background: linear-gradient(135deg, #5b93f6 0%, #2f6fdb 55%, #2357b6 100%);
+}
+.about-logo {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 12px;
+  padding: 9px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(16, 24, 40, .28);
+}
 .about-logo img { width: 100%; height: 100%; display: block; }
-.about-title { margin: 0; font-size: 20px; font-weight: 800; }
+.about-title { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: .2px; color: #fff; }
 .about-ver {
   display: inline-block;
-  vertical-align: middle;
-  margin-left: 6px;
-  padding: 1px 8px;
+  margin-top: 8px;
+  padding: 2px 11px;
   border-radius: 999px;
-  background: var(--np-accent-soft);
-  color: var(--np-accent);
+  background: rgba(255, 255, 255, .2);
+  color: #fff;
   font-size: 12px;
   font-weight: 700;
 }
-.about-tagline { margin: 2px 0 0; font-size: 13px; color: var(--np-gutter-fg); }
+.about-tagline { margin: 12px 0 0; font-size: 13px; color: rgba(255, 255, 255, .92); }
 
-.about-section { margin-top: 16px; }
-.about-h3 { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
-.about-list { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
-.about-list li { display: flex; gap: 10px; padding: 3px 0; min-width: 0; }
-.about-key { flex: 0 0 76px; color: var(--np-gutter-fg); }
-/* Let long values (e.g. the GitHub URL) wrap instead of forcing a horizontal scroll */
-.about-list li > a, .about-list li > span:not(.about-key) { min-width: 0; overflow-wrap: anywhere; }
-.about-list a { color: var(--np-accent); text-decoration: none; }
-.about-list a:hover { text-decoration: underline; }
+.about-body { padding: 18px 22px 6px; }
+
+.about-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.about-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--np-accent);
+  background: var(--np-accent-soft);
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+
+.about-section { margin-top: 20px; }
+.about-h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  color: var(--np-gutter-fg);
+}
+
+.about-rows { display: flex; flex-direction: column; gap: 1px; }
+.about-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  color: var(--np-fg);
+  text-decoration: none;
+  min-width: 0;
+  transition: background 120ms ease;
+}
+a.about-row:hover { background: var(--np-accent-soft); }
+.about-row-ico {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--np-accent);
+}
+.about-row-ico .ico { width: 17px; height: 17px; }
+.about-row-main { display: flex; flex-direction: column; line-height: 1.35; min-width: 0; }
+.about-row-main b { font-weight: 700; }
+.about-row-main small { color: var(--np-gutter-fg); font-size: 12px; }
+.about-row-val { min-width: 0; overflow-wrap: anywhere; color: var(--np-accent); }
 
 .about-donate {
-  background: linear-gradient(#fff, #fff7ef);
-  border: 1px solid #ffe3c2;
-  border-radius: 12px;
-  padding: 14px;
+  background: linear-gradient(180deg, #fffdfa, #fff6ec);
+  border: 1px solid #ffe4c6;
+  border-radius: 14px;
+  padding: 16px;
   text-align: center;
 }
-.about-donate .about-h3 { color: #e0651b; }
-.about-donate-text { margin: 0 0 12px; font-size: 13px; color: #5b5147; }
-.about-qr-row {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
+.about-donate .about-h3 {
+  color: #e0651b;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13.5px;
 }
-.about-qr-item { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.about-qr-cap { font-size: 12px; font-weight: 600; color: #5b5147; }
+.about-donate-text { margin: 0 0 14px; font-size: 12.5px; color: #7a6a55; }
+.about-qr-row { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.about-qr-item { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.about-qr-cap {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: #b07a3a;
+}
 .about-qr {
-  width: 132px;
+  height: 148px;           /* fixed height so both QRs match; width follows aspect */
+  width: auto;
   max-width: 100%;
-  border-radius: 10px;
-  border: 1px solid var(--np-border);
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid #eee;
+  box-shadow: 0 3px 10px rgba(16, 24, 40, .08);
   background: #fff;
 }
-.about-foot { margin: 14px 0 0; text-align: center; font-size: 12px; color: var(--np-gutter-fg); }
+.about-foot {
+  margin-top: 18px;
+  padding: 14px 22px 18px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--np-gutter-fg);
+  border-top: 1px solid var(--np-border);
+}
 
 /* Link popup */
 .link-wrap { position: relative; display: inline-flex; flex: 0 0 auto; }
@@ -669,6 +777,54 @@ html, body {
 .doc::-webkit-scrollbar-thumb:hover { background: var(--np-gutter-fg); }
 
 /* ============================================================
+   MINIMAP (document overview)
+   ============================================================ */
+.minimap {
+  position: absolute;      /* float over the editor's right edge, left of the scrollbar */
+  top: 0;
+  right: 14px;             /* leave the scrollbar flush to the far right */
+  bottom: 0;
+  width: 92px;
+  z-index: 6;
+  overflow: hidden;
+  background: var(--np-gutter-bg);
+  border-left: 1px solid var(--np-border);
+  cursor: pointer;
+  user-select: none;
+}
+/* Keep wrapped text from sliding under the minimap (desktop only) */
+@media (min-width: 901px) {
+  .doc.mm-on { padding-right: 96px; }
+}
+/* The scaled-down clone reuses .doc typography but is laid out statically */
+.minimap-content.doc {
+  position: absolute;
+  top: 0;
+  left: 0;
+  flex: none;
+  height: auto;
+  min-width: 0;
+  overflow: visible;
+  background: transparent;
+  transform-origin: top left;
+  pointer-events: none;
+}
+.minimap-content.doc::-webkit-scrollbar { display: none; }
+.minimap-viewport {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 8px;
+  background: rgba(47, 111, 219, 0.14);
+  border-top: 1px solid rgba(47, 111, 219, 0.35);
+  border-bottom: 1px solid rgba(47, 111, 219, 0.35);
+  pointer-events: none;
+}
+.minimap:hover .minimap-viewport { background: rgba(47, 111, 219, 0.22); }
+/* No room for a minimap on phones / tablets */
+@media (max-width: 900px) { .minimap { display: none !important; } }
+
+/* ============================================================
    MULTI-CURSOR (Sublime-style) + FIND BAR
    ============================================================ */
 /* Hide the native caret while extra carets are active — we paint our own */
@@ -829,13 +985,17 @@ html, body {
   .mc-find-ico { display: none; }
   .mc-find-input { flex: 1 1 100%; width: auto; min-width: 0; }
 
-  .modal { padding: 18px 16px 14px; border-radius: 12px; }
+  .modal { border-radius: 14px; }
+  .modal:not(.about-modal) { padding: 18px 16px 14px; }
+  .about-hero { padding: 24px 18px 20px; }
+  .about-body { padding: 16px 16px 4px; }
+  .about-foot { padding: 12px 16px 16px; }
   .modal-backdrop { padding: 12px; }
-  .about-qr { width: 128px; }
+  .about-qr { height: 140px; }
 }
 
 /* Very small phones */
 @media (max-width: 380px) {
-  .about-qr { width: 118px; }
+  .about-qr { height: 128px; }
   .tsel-style { min-width: 92px; }
 }

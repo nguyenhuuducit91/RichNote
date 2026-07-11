@@ -25,6 +25,7 @@ A fast, beautiful **WYSIWYG editor** for [Standard Notes](https://standardnotes.
 - 🧰 **Word‑like toolbar** — style dropdown (Normal / **H1–H6** / Quote), font, size, **B / I / U / S**, inline code, and more, all on **one clean line**.
 - 🎨 **Text & highlight colors** — a **Google‑Sheets‑style palette** plus any custom color.
 - 🔢 **Line numbers + current‑line highlight** — a code‑editor feel for your notes.
+- 🗺️ **Minimap** — a VS Code‑style overview on the right; click or drag to jump anywhere. Toggle in **View → Minimap**.
 - ⌨️ **Keyboard shortcuts everyone knows** — `Ctrl+B/I/U`, `Ctrl+Alt+1…6` for headings, `Ctrl+L/E/R` to align, `Ctrl+K` for links, `F4` to repeat the last action.
 - 🔗 **Smart links** — insert/edit with a popup; **Ctrl/Cmd‑click** to open.
 - 🧬 **Multiple cursors (Sublime‑style)** — `Shift+Alt+↑/↓` to add a caret above/below, **Alt‑click** to drop one anywhere, then type / delete / arrow‑select on every line at once.
@@ -68,6 +69,7 @@ Standard Notes loads editors from a URL, so the fastest way is to use the hosted
 | `Ctrl+F` | Find | `Alt+Enter` | Select all matches (multi‑cursor) |
 | `↑ ↓ ← →` (with cursors) | Move every cursor | `Shift+↑↓←→ / Home / End` | Select at every cursor |
 | `Ctrl+Shift+.` | Increase font size | `Ctrl+Shift+,` | Decrease font size |
+| `Ctrl+Shift+V` | Paste value only (plain) | | |
 | `Esc` | Collapse to one cursor | | |
 
 `Ctrl` = `Cmd` on macOS.

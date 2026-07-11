@@ -91,12 +91,11 @@
   function ensureContent() {
     if (editor.children.length === 0) editor.innerHTML = '<p><br></p>';
   }
-  // Insert pasted text: multiple lines -> multiple blocks; a single line -> inline
-  function insertPastedText(text) {
-    if (text == null || text === '') return;
-    editor.focus();
-    var lines = text.replace(/\r\n?/g, '\n').split('\n');
+  // Insert an array of text lines: multiple -> a block each; a single -> inline
+  function insertLines(lines) {
+    if (!lines || !lines.length) return;
     if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+    editor.focus();
     if (lines.length === 1) {
       document.execCommand('insertText', false, lines[0]);
     } else {
@@ -104,18 +103,170 @@
         return '<p>' + (l ? escapeHtml(l) : '<br>') + '</p>';
       }).join('');
       document.execCommand('insertHTML', false, html);
+      stripSpuriousBg();
     }
     onChange();
   }
-  function doPaste() {
-    editor.focus();
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      navigator.clipboard.readText()
-        .then(function (t) { insertPastedText(t); })
-        .catch(function () { try { document.execCommand('paste'); } catch (e) {} });
-    } else {
-      try { document.execCommand('paste'); } catch (e) {}
+  // Insert pasted text: multiple lines -> multiple blocks; a single line -> inline
+  function insertPastedText(text) {
+    if (text == null || text === '') return;
+    insertLines(text.replace(/\r\n?/g, '\n').split('\n'));
+  }
+  // Plain "value only" paste: collapse blank-line runs, because copying rich blocks
+  // puts a BLANK LINE between paragraphs in text/plain (Chromium) — and Ctrl+Shift+V
+  // gives us only text/plain (no HTML) so we can't use the block structure here.
+  function insertValueText(text) {
+    if (text == null || text === '') return;
+    insertLines(text.replace(/\r\n?/g, '\n').replace(/\n{2,}/g, '\n').split('\n'));
+  }
+  /* ---------- Formatted paste (keep bold/colors/links) with sanitising ---------- */
+  var PASTE_TAGS = { P:1, DIV:1, BR:1, SPAN:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, DEL:1,
+    MARK:1, CODE:1, PRE:1, A:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1, FONT:1 };
+  var STYLE_KEEP = ['color', 'background-color', 'font-weight', 'font-style',
+    'text-decoration', 'text-decoration-line', 'font-size', 'font-family'];
+
+  function filterStyle(el) {
+    var out = '';
+    for (var i = 0; i < STYLE_KEEP.length; i++) {
+      var v = el.style.getPropertyValue(STYLE_KEEP[i]);
+      if (v) out += STYLE_KEEP[i] + ':' + v + ';';
     }
+    return out;
+  }
+  // Strip scripts/styles/classes/handlers; keep a safe subset of tags + inline formatting
+  function sanitizeHtml(html) {
+    var box = document.createElement('div');
+    box.innerHTML = String(html || '');
+    // Remove comment nodes — clipboard HTML carries <!--StartFragment-->/<!--EndFragment-->
+    // markers that would otherwise become spurious empty lines when pasted.
+    var walker = document.createTreeWalker(box, NodeFilter.SHOW_COMMENT, null);
+    var comments = [], cm;
+    while ((cm = walker.nextNode())) comments.push(cm);
+    for (var ci = 0; ci < comments.length; ci++) if (comments[ci].parentNode) comments[ci].parentNode.removeChild(comments[ci]);
+    var drop = box.querySelectorAll('script,style,meta,link,title,head,object,embed,iframe,noscript,input,button,form,svg,img');
+    for (var d = 0; d < drop.length; d++) if (drop[d].parentNode) drop[d].parentNode.removeChild(drop[d]);
+    var els = box.querySelectorAll('*');
+    for (var j = els.length - 1; j >= 0; j--) {          // reverse: unwrap children before parents
+      var el = els[j];
+      if (!PASTE_TAGS[el.tagName]) {                      // unwrap unknown tags, keep their content
+        var parent = el.parentNode;
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        parent.removeChild(el);
+        continue;
+      }
+      var attrs = Array.prototype.slice.call(el.attributes);
+      for (var k = 0; k < attrs.length; k++) {
+        var name = attrs[k].name.toLowerCase();
+        if (name === 'href' && el.tagName === 'A') {
+          if (/^\s*javascript:/i.test(attrs[k].value)) el.removeAttribute('href');
+        } else if (name === 'color' && el.tagName === 'FONT') {
+          el.style.color = attrs[k].value; el.removeAttribute('color');
+        } else if (name === 'style') {
+          var s = filterStyle(el);
+          if (s) el.setAttribute('style', s); else el.removeAttribute('style');
+        } else {
+          el.removeAttribute(attrs[k].name);
+        }
+      }
+    }
+    return box.innerHTML;
+  }
+  // Chromium's insertHTML/insertText sometimes injects a spurious white background on
+  // inserted inline nodes — strip white/transparent backgrounds so pasted text looks clean.
+  function stripSpuriousBg() {
+    var els = editor.querySelectorAll('[style*="background"]');
+    for (var i = 0; i < els.length; i++) {
+      var bg = els[i].style.backgroundColor;
+      if (bg === 'rgb(255, 255, 255)' || bg === 'white' || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') {
+        els[i].style.removeProperty('background-color');
+        if (!els[i].getAttribute('style')) els[i].removeAttribute('style');
+      }
+    }
+  }
+  function pasteHtml(html) {
+    var clean = sanitizeHtml(html);
+    if (!clean) return;
+    editor.focus();
+    document.execCommand('insertHTML', false, clean);
+    stripSpuriousBg();
+    normalizeBlocks();
+    ensureContent();
+    onChange();
+  }
+
+  // Turn pasted HTML into one plain line PER BLOCK. Used for "value only" so that
+  // copying N paragraphs pastes N lines — not 2N (Chromium's text/plain separates
+  // blocks with a blank line, which would otherwise add an empty line between each).
+  var LINE_BLOCK = /^(P|DIV|H[1-6]|BLOCKQUOTE|PRE|LI|TR)$/;
+  function collectLines(container, lines) {
+    var run = null;   // accumulates a run of inline nodes into one line
+    function flush() { if (run !== null) { lines.push(run); run = null; } }
+    Array.prototype.forEach.call(container.childNodes, function (node) {
+      if (node.nodeType === 1 && (node.tagName === 'UL' || node.tagName === 'OL')) {
+        flush(); collectLines(node, lines);
+      } else if (node.nodeType === 1 && LINE_BLOCK.test(node.tagName)) {
+        flush(); lines.push(node.textContent.replace(/\s*\n\s*/g, ' '));
+      } else if (node.nodeType === 1 && node.tagName === 'BR') {
+        lines.push(run || ''); run = null;
+      } else {
+        run = (run || '') + (node.textContent || node.nodeValue || '');
+      }
+    });
+    flush();
+  }
+  function pasteValueFromHtml(html) {
+    var box = document.createElement('div');
+    box.innerHTML = sanitizeHtml(html);
+    var lines = [];
+    collectLines(box, lines);
+    if (lines.length) insertLines(lines);
+    else insertPastedText(box.textContent);
+  }
+
+  // Read the clipboard and paste. formatted=true keeps HTML formatting; formatted=false
+  // pastes plain text ("value only") but still uses the HTML block structure (one line
+  // per block) so multi-paragraph copies don't gain blank lines.
+  function pasteFromClipboard(formatted) {
+    editor.focus();
+    var clip = navigator.clipboard;
+    function readPlain() {
+      if (clip && clip.readText) {
+        clip.readText().then(function (t) { (formatted ? insertPastedText : insertValueText)(t); })
+          .catch(function () { try { document.execCommand('paste'); } catch (e) {} });
+      } else { try { document.execCommand('paste'); } catch (e) {} }
+    }
+    if (clip && clip.read) {
+      clip.read().then(function (items) {
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].types.indexOf('text/html') !== -1) {
+            items[i].getType('text/html').then(function (b) {
+              b.text().then(formatted ? pasteHtml : pasteValueFromHtml);
+            });
+            return;
+          }
+        }
+        readPlain();
+      }).catch(readPlain);
+    } else {
+      readPlain();
+    }
+  }
+  function doPaste()        { pasteFromClipboard(true); }   // default paste — keep formatting
+  function pasteValueOnly() { pasteFromClipboard(false); }  // menu: Paste value only
+
+  // Ctrl+Shift+V / Ctrl+Alt+V: the async Clipboard API is often blocked inside the
+  // Standard Notes iframe (needs focus + clipboard-read permission). So instead of
+  // reading the clipboard directly, we DON'T preventDefault — we let the browser fire
+  // a trusted 'paste' event (whose clipboardData needs no permission) and tag it with
+  // the desired mode. A short fallback covers browsers that don't emit a paste event.
+  var pasteOverride = null;      // 'plain' | 'format'
+  var pasteOverrideTimer = null;
+  function armPasteOverride(mode) {
+    pasteOverride = mode;
+    if (pasteOverrideTimer) clearTimeout(pasteOverrideTimer);
+    pasteOverrideTimer = setTimeout(function () {
+      if (pasteOverride === mode) { pasteOverride = null; pasteFromClipboard(mode === 'format'); }
+    }, 80);
   }
   function blockOf(node) {
     var n = node;
@@ -210,7 +361,14 @@
     stSel.textContent = selLen > 0 ? ('Sel : ' + selLen) : '';
   }
 
-  editor.addEventListener('scroll', function () { gutter.scrollTop = editor.scrollTop; });
+  // Sync the gutter to the editor's scroll, throttled to one update per animation
+  // frame so fast scrolling stays smooth (no per-event layout thrash).
+  var gutterSyncRaf = false;
+  editor.addEventListener('scroll', function () {
+    if (gutterSyncRaf) return;
+    gutterSyncRaf = true;
+    requestAnimationFrame(function () { gutterSyncRaf = false; gutter.scrollTop = editor.scrollTop; });
+  }, { passive: true });
 
   /* ---------- Toolbar button states ---------- */
   function q(cmd) { try { return document.queryCommandState(cmd); } catch (e) { return false; } }
@@ -261,13 +419,27 @@
     var fbU = fb ? fb.toUpperCase() : '';
     styleSelect.value = /^(H1|H2|H3|H4|H5|H6|BLOCKQUOTE)$/.test(fbU) ? fbU : 'P';
 
-    // Sync the font & size selects with the selection (Word-like)
+    // Sync the font & size selects + the colour swatches with the selection (Word-like)
     var el = selEl();
     if (el) {
       var cs = window.getComputedStyle(el);
       setSelectFont(cs.fontFamily);
       setSelectSize(Math.round(parseFloat(cs.fontSize)));
+      foreBar.style.background = cs.color;                 // text colour (inherited)
+      backBar.style.background = effectiveBg(el);          // highlight colour
     }
+  }
+
+  // Nearest inline highlight colour above the caret. Skips the block itself so the
+  // current-line highlight (a UI affordance on the <p>) isn't mistaken for a text highlight.
+  function effectiveBg(node) {
+    var n = node && node.nodeType === 3 ? node.parentElement : node;
+    while (n && n !== editor && n.parentNode !== editor) {   // stop before the top-level block
+      var bg = window.getComputedStyle(n).backgroundColor;
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+      n = n.parentElement;
+    }
+    return 'transparent';
   }
 
   function selEl() {
@@ -476,7 +648,8 @@
       case 'redo':      document.execCommand('redo'); break;
       case 'cut':       document.execCommand('cut'); break;
       case 'copy':      document.execCommand('copy'); break;
-      case 'paste':     doPaste(); return;
+      case 'paste':       doPaste(); return;
+      case 'pasteValue':  pasteValueOnly(); return;
       case 'selectAll': document.execCommand('selectAll'); break;
       case 'bold':      document.execCommand('bold'); break;
       case 'italic':    document.execCommand('italic'); break;
@@ -502,6 +675,7 @@
       case 'about':     case 'donate': openAbout(); return;
       case 'clear':     clearFormat(); return;
       case 'wrap':      toggleWrap(); return;
+      case 'minimap':   if (window.__richnoteMinimap) window.__richnoteMinimap.toggle(); return;
     }
     onChange();
   }
@@ -641,6 +815,23 @@
     lastAction = function () { doColor(kind, color); };
     closePopups();
   }
+  // Highlight the palette swatch matching the caret's current colour
+  function hexToRgb(hex) {
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+    return m ? 'rgb(' + parseInt(m[1], 16) + ', ' + parseInt(m[2], 16) + ', ' + parseInt(m[3], 16) + ')' : null;
+  }
+  function currentColorFor(kind) {
+    var el = selEl();
+    if (!el) return null;
+    return kind === 'fore' ? window.getComputedStyle(el).color : effectiveBg(el);
+  }
+  function markSelectedSwatch(pop, kind) {
+    var cur = currentColorFor(kind);
+    var sws = pop.querySelectorAll('.color-swatch');
+    for (var i = 0; i < sws.length; i++) {
+      sws[i].classList.toggle('selected', !!cur && hexToRgb(sws[i].dataset.c) === cur);
+    }
+  }
   (function initColors() {
     var wraps = toolbar.querySelectorAll('.tcolor-wrap');
     for (var i = 0; i < wraps.length; i++) {
@@ -652,7 +843,7 @@
         btn.addEventListener('click', function () {
           var isOpen = pop.classList.contains('open');
           closePopups(); closeMenus();
-          if (!isOpen) { pop.classList.add('open'); positionPopup(pop, btn); }
+          if (!isOpen) { pop.classList.add('open'); positionPopup(pop, btn); markSelectedSwatch(pop, kind); }
         });
         pop.addEventListener('mousedown', function (ev) {
           if (ev.target.closest('input[type="color"]')) return;
@@ -666,6 +857,49 @@
         var input = pop.querySelector('input[type="color"]');
         if (input) input.addEventListener('change', function () { applyColor(kind, input.value); });
       })(wraps[i]);
+    }
+  })();
+
+  /* ---------- Icons for the dropdown menu items ---------- */
+  (function initMenuIcons() {
+    function s(inner) { return '<svg class="ico" viewBox="0 0 16 16">' + inner + '</svg>'; }
+    function g(txt, extra) { return '<span class="menu-ico-txt"' + (extra ? ' style="' + extra + '"' : '') + '>' + txt + '</span>'; }
+    var ICONS = {
+      undo: s('<path d="M4 7h6a3.5 3.5 0 1 1 0 7H6"/><path d="M6.5 4.5 4 7l2.5 2.5"/>'),
+      redo: s('<path d="M12 7H6a3.5 3.5 0 1 0 0 7h4"/><path d="M9.5 4.5 12 7 9.5 9.5"/>'),
+      cut: s('<circle cx="4" cy="4.2" r="2"/><circle cx="4" cy="11.8" r="2"/><path d="M5.7 5.4 14 11.8M5.7 10.6 14 4.2"/>'),
+      copy: s('<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V4A1.5 1.5 0 0 0 9 2.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"/>'),
+      paste: s('<rect x="3.5" y="3" width="9" height="11" rx="1.5"/><rect x="5.5" y="1.9" width="5" height="2.5" rx="1"/>'),
+      pasteValue: s('<rect x="3.5" y="3" width="9" height="11" rx="1.5"/><rect x="5.5" y="1.9" width="5" height="2.5" rx="1"/><path d="M5.7 7.6h4.6M5.7 10h3"/>'),
+      selectAll: s('<rect x="2.6" y="2.6" width="10.8" height="10.8" rx="1.5" stroke-dasharray="2.3 1.7"/>'),
+      bold: g('B', 'font-weight:800'),
+      italic: g('I', 'font-style:italic'),
+      underline: g('U', 'text-decoration:underline'),
+      strike: g('S', 'text-decoration:line-through'),
+      h1: g('H1'), h2: g('H2'), h3: g('H3'), h4: g('H4'), h5: g('H5'), h6: g('H6'),
+      p: g('¶'),
+      quote: s('<path d="M3.3 4.2v7.6" stroke-width="2"/><path d="M6.3 5.4h7M6.3 8h7M6.3 10.6h5"/>'),
+      left: s('<path d="M2 4h12M2 8h8M2 12h12"/>'),
+      center: s('<path d="M2 4h12M4 8h8M2 12h12"/>'),
+      right: s('<path d="M2 4h12M6 8h8M2 12h12"/>'),
+      clear: s('<path d="M3 13.2h9"/><path d="M8.7 3.1l4.2 4.2a1 1 0 0 1 0 1.4l-3.3 3.3H6.3L2.7 8.4a1 1 0 0 1 0-1.4l4.6-4.6a1 1 0 0 1 1.4 0z"/><path d="M6 5.8l4.2 4.2"/>'),
+      link: s('<path d="M6.8 9.2a2.6 2.6 0 0 1 0-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.1 1.1"/><path d="M9.2 6.8a2.6 2.6 0 0 1 0 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6-3.6l1.1-1.1"/>'),
+      ul: s('<circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/>'),
+      ol: s('<path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text>'),
+      wrap: s('<path d="M2 4h12M2 8h8.4a2.4 2.4 0 0 1 0 4.8H7.4"/><path d="M9.2 10.8 7.4 12.8l1.8 2"/>'),
+      minimap: s('<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M10.2 3.5v9" opacity=".55"/><path d="M4.6 5.6h3.4M4.6 8h4.2M4.6 10.4h2.6" stroke-width="1"/>'),
+      donate: s('<path class="fill" d="M8 13.4C8 13.4 2.6 10 2.6 6.3A2.6 2.6 0 0 1 8 5.1a2.6 2.6 0 0 1 5.4 1.2C13.4 10 8 13.4 8 13.4z"/>'),
+      about: s('<circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.4"/><circle class="dot" cx="8" cy="5.2" r=".75"/>')
+    };
+    var items = menubar.querySelectorAll('.menu-item[data-cmd]');
+    for (var i = 0; i < items.length; i++) {
+      var html = ICONS[items[i].dataset.cmd];
+      if (!html) continue;
+      var span = document.createElement('span');
+      span.className = 'menu-ico';
+      span.innerHTML = html;
+      var check = items[i].querySelector('.menu-check');
+      items[i].insertBefore(span, check ? check.nextSibling : items[i].firstChild);
     }
   })();
 
@@ -703,14 +937,24 @@
     try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
   });
 
-  /* ---------- Paste: each line becomes its own block ---------- */
+  /* ---------- Paste: keep formatting when available, else each line -> a block ---------- */
   editor.addEventListener('paste', function (ev) {
+    if (pasteOverrideTimer) { clearTimeout(pasteOverrideTimer); pasteOverrideTimer = null; }
+    var mode = pasteOverride; pasteOverride = null;   // 'plain' / 'format' / null (default)
     var cd = ev.clipboardData || window.clipboardData;
     if (!cd) return;
+    var html = cd.getData('text/html');
     var text = cd.getData('text/plain');
-    if (text == null || text === '') return;
+    if ((html == null || html === '') && (text == null || text === '')) return;
     ev.preventDefault();
-    insertPastedText(text);
+    if (mode === 'plain') {                                             // value only
+      if (html && html.trim()) pasteValueFromHtml(html);               // one line per block
+      else insertValueText(text);                                      // text/plain -> collapse blanks
+    } else if (html && html.trim()) {
+      pasteHtml(html);                                                  // default: keep formatting
+    } else {
+      insertPastedText(text);
+    }
   });
 
   /* ---------- Keyboard shortcuts (Word-like) & Tab ---------- */
@@ -750,6 +994,7 @@
     } else if (ev.shiftKey) {
       if (c === 'KeyX') exec('strike');
       else if (c === 'KeyC') exec('code');
+      else if (c === 'KeyV') { armPasteOverride('plain'); handled = false; }    // Ctrl+Shift+V  paste value only
       else if (c === 'Digit7') exec('ol');
       else if (c === 'Digit8') exec('ul');
       else if (c === 'Period') changeFontSize(1);     // Ctrl+Shift+.  increase font size
