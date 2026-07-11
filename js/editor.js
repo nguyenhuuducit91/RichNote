@@ -51,6 +51,14 @@
   var workingNote = null;
   var lastSavedHTML = null;
   var wrapOn = false;
+  var wrapUserSet = false;   // true once the user toggles Word Wrap themselves
+  // Auto Word-Wrap heuristic: ON for touch devices (phones/tablets), and for any
+  // genuinely narrow window (so it also flips as a desktop window is resized).
+  var mqTouch  = window.matchMedia ? window.matchMedia('(pointer: coarse)') : null;
+  var mqNarrow = window.matchMedia ? window.matchMedia('(max-width: 640px)') : null;
+  function autoWrap() {
+    return !!((mqTouch && mqTouch.matches) || (mqNarrow && mqNarrow.matches));
+  }
   var savedRange = null;   // preserve selection while using selects / color popups
   var lastAction = null;   // repeats the last formatting action (F4)
 
@@ -438,6 +446,7 @@
 
   function toggleWrap() {
     wrapOn = !wrapOn;
+    wrapUserSet = true;   // stop auto-following the screen size once the user decides
     editor.classList.toggle('wrap', wrapOn);
     try { localStorage.setItem('richnote-wrap', wrapOn ? '1' : '0'); } catch (e) {}
     refresh();
@@ -752,17 +761,31 @@
   }
 
   /* ---------- Startup ---------- */
-  // Word Wrap: honor a saved preference; otherwise default it ON for mobile-width
-  // screens (long lines wrap instead of scrolling horizontally) and OFF on desktop.
+  // Word Wrap: honor a saved preference; otherwise follow the device/size — ON for
+  // touch devices (phones/tablets) and narrow windows, OFF on desktop — and keep
+  // following it as the window resizes until the user toggles it themselves.
   try {
     var savedWrap = localStorage.getItem('richnote-wrap');
     if (savedWrap === null) {
-      wrapOn = !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
+      wrapOn = autoWrap();
     } else {
+      wrapUserSet = true;
       wrapOn = savedWrap === '1';
     }
   } catch (e) {}
   editor.classList.toggle('wrap', wrapOn);
+  // Auto-follow device / window-size changes until the user sets Word Wrap explicitly
+  var onWrapMq = function () {
+    if (wrapUserSet) return;
+    wrapOn = autoWrap();
+    editor.classList.toggle('wrap', wrapOn);
+    refresh();
+  };
+  [mqTouch, mqNarrow].forEach(function (mq) {
+    if (!mq) return;
+    if (mq.addEventListener) mq.addEventListener('change', onWrapMq);
+    else if (mq.addListener) mq.addListener(onWrapMq);   // older engines
+  });
   try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
   ensureContent();
   connectStandardNotes();
