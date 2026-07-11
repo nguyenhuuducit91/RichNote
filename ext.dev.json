@@ -1,0 +1,20 @@
+{
+  "identifier": "com.vietis.richnote.dev",
+  "name": "RichNote (DEV)",
+  "content_type": "SN|Component",
+  "area": "editor-editor",
+  "version": "1.0.0",
+  "description": "DEV build of RichNote — loads the editor from your local dev server (http://localhost:8080). Use with the Standard Notes DESKTOP app (the web app blocks http://). Run `npm start` first, then import this manifest.",
+  "url": "http://localhost:8080/index.html",
+  "latest_url": "http://localhost:8080/ext.dev.json",
+  "download_url": "http://localhost:8080/index.html",
+  "marketing_url": "https://github.com/nguyenhuuducit91/RichNote",
+  "dock_icon": {
+    "type": "circle",
+    "background_color": "#d97706",
+    "foreground_color": "#ffffff",
+    "border_color": "#d97706"
+  },
+  "author": "Nguyen Huu Duc",
+  "flags": ["dev"]
+}

@@ -27,6 +27,8 @@ A fast, beautiful **WYSIWYG editor** for [Standard Notes](https://standardnotes.
 - 🔢 **Line numbers + current‑line highlight** — a code‑editor feel for your notes.
 - ⌨️ **Keyboard shortcuts everyone knows** — `Ctrl+B/I/U`, `Ctrl+Alt+1…6` for headings, `Ctrl+L/E/R` to align, `Ctrl+K` for links, `F4` to repeat the last action.
 - 🔗 **Smart links** — insert/edit with a popup; **Ctrl/Cmd‑click** to open.
+- 🧬 **Multiple cursors (Sublime‑style)** — `Shift+Alt+↑/↓` to add a caret above/below, **Alt‑click** to drop one anywhere, then type / delete / arrow‑select on every line at once.
+- 🔍 **Find (`Ctrl+F`)** — jump between matches and **“Select all”** (`Alt+Enter`) to turn every match into a caret and edit them together.
 - ↹ **Tab indentation** (single line or a whole block) and a **Word Wrap** toggle.
 - 🌗 **Clean light theme**, thoughtfully designed and responsive.
 - 🔒 **Private by design** — 100% local, static HTML/CSS/JS. No trackers, no network calls, no build step.
@@ -62,6 +64,10 @@ Standard Notes loads editors from a URL, so the fastest way is to use the hosted
 | `Ctrl+Shift+8 / 7` | Bulleted / Numbered list | `Ctrl+K` | Insert link |
 | `Tab` / `Shift+Tab` | Indent / Outdent | `Ctrl+\` | Clear formatting |
 | `Enter` / `Shift+Enter` | New line (new block) | `F4` | **Repeat last format** |
+| `Shift+Alt+↑ / ↓` | Add cursor above / below | `Alt+Click` | Add / remove a cursor |
+| `Ctrl+F` | Find | `Alt+Enter` | Select all matches (multi‑cursor) |
+| `↑ ↓ ← →` (with cursors) | Move every cursor | `Shift+↑↓←→ / Home / End` | Select at every cursor |
+| `Esc` | Collapse to one cursor | | |
 
 `Ctrl` = `Cmd` on macOS.
 
@@ -98,10 +104,12 @@ Found a bug or have an idea? [Open an issue](https://github.com/nguyenhuuducit91
 
 ```
 RichNote/
-├── ext.json                  # Standard Notes component manifest
+├── ext.json                  # Standard Notes component manifest (production)
+├── ext.dev.json              # DEV manifest — loads from http://localhost:8080
 ├── index.html                # Editor page (menu, toolbar, WYSIWYG area)
 ├── styles/editor.css         # All styling (light theme, toolbar, dialogs)
 ├── js/editor.js              # Editor logic + ComponentRelay integration
+├── js/multicursor.js         # Multi-cursor & Find (Sublime-style)
 ├── vendor/component-relay.js # Standard Notes bridge library
 ├── Images/                   # Screenshot + donate QR
 └── LICENSE                   # MIT
