@@ -26,6 +26,8 @@
   var styleSelect = document.getElementById('styleSelect');
   var fontSelect  = document.getElementById('fontSelect');
   var sizeSelect  = document.getElementById('sizeSelect');
+  var sizeArrow   = document.getElementById('sizeArrow');
+  var sizePop     = document.getElementById('sizePop');
   var foreBar     = document.getElementById('foreBar');
   var backBar     = document.getElementById('backBar');
   var linkPop     = document.getElementById('linkPop');
@@ -281,9 +283,9 @@
     fontSelect.selectedIndex = idx;
   }
   function setSelectSize(px) {
-    var opts = sizeSelect.options, idx = 0;
-    for (var i = 1; i < opts.length; i++) { if (parseInt(opts[i].value, 10) === px) { idx = i; break; } }
-    sizeSelect.selectedIndex = idx;
+    // sizeSelect is an editable input — don't overwrite what the user is typing
+    if (document.activeElement === sizeSelect) return;
+    sizeSelect.value = px;
   }
 
   function refresh() {
@@ -420,6 +422,20 @@
     onChange();
   }
 
+  // Current font size (px) at the selection, for the increase/decrease shortcuts
+  function currentFontSizePx() {
+    var el = selEl();
+    var px = el ? Math.round(parseFloat(window.getComputedStyle(el).fontSize)) : 0;
+    return px || 12;
+  }
+  // Bump the font size up/down by `delta` px (Ctrl+Shift+. / Ctrl+Shift+,)
+  function changeFontSize(delta) {
+    editor.focus();
+    var next = Math.max(6, Math.min(200, currentFontSizePx() + delta));
+    applyFontSize(next);                 // onChange() -> updateToolbar() syncs the Size box
+    lastAction = function () { changeFontSize(delta); };   // F4 repeats
+  }
+
   // Indent blocks via padding (keep the block flush-left so the highlight covers the whole line)
   function setIndent(b, lvl) {
     if (lvl > 0) { b.setAttribute('data-indent', lvl); b.style.setProperty('--indent', (lvl * 24) + 'px'); }
@@ -496,9 +512,11 @@
     for (var i = 0; i < open.length; i++) open[i].classList.remove('open');
   }
   menubar.addEventListener('mousedown', function (ev) {
-    if (ev.target.closest('.menu-title, .menu-item')) ev.preventDefault(); // keep the editor selection
+    if (ev.target.closest('.menu-title, .menu-item, .tbtn')) ev.preventDefault(); // keep the editor selection
   });
   menubar.addEventListener('click', function (ev) {
+    var tbtn = ev.target.closest('.tbtn');   // undo / redo living in the menu bar
+    if (tbtn) { closeMenus(); exec(tbtn.dataset.cmd); return; }
     var title = ev.target.closest('.menu-title');
     if (title) {
       var menu = title.parentNode;
@@ -518,7 +536,7 @@
   });
   document.addEventListener('click', function (ev) {
     if (!ev.target.closest('#menubar')) closeMenus();
-    if (!ev.target.closest('.tcolor-wrap') && !ev.target.closest('.link-wrap')) closePopups();
+    if (!ev.target.closest('.tcolor-wrap') && !ev.target.closest('.link-wrap') && !ev.target.closest('.tsize-wrap')) closePopups();
   });
 
   /* ---------- Toolbar events ---------- */
@@ -551,12 +569,45 @@
     onChange();
   });
   sizeSelect.addEventListener('change', function () {
-    if (!this.value) return;
     var px = parseInt(this.value, 10);
+    if (!px || isNaN(px)) { this.value = currentFontSizePx(); return; }  // reject non-numeric input
+    px = Math.max(6, Math.min(200, px));
+    this.value = px;
     restoreSel();
     applyFontSize(px);
     lastAction = function () { applyFontSize(px); };
   });
+  // Enter applies the typed size (blur -> change) and returns focus to the editor
+  sizeSelect.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); this.blur(); }
+  });
+
+  // Custom size dropdown (native <datalist>/<select> popups mis-position inside the
+  // Standard Notes iframe, so we render and position our own — fixed, like the color popups).
+  (function initSizeDropdown() {
+    if (!sizeArrow || !sizePop) return;
+    var SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40, 48, 64, 72];
+    sizePop.innerHTML = SIZES.map(function (s) {
+      return '<button type="button" class="tsize-opt" data-s="' + s + '">' + s + '</button>';
+    }).join('');
+    sizeArrow.addEventListener('mousedown', function (ev) { ev.preventDefault(); saveSel(); });
+    sizeArrow.addEventListener('click', function () {
+      var open = sizePop.classList.contains('open');
+      closePopups(); closeMenus();
+      if (!open) { sizePop.classList.add('open'); positionPopup(sizePop, sizeSelect.parentNode); }
+    });
+    sizePop.addEventListener('mousedown', function (ev) { ev.preventDefault(); });   // keep the selection
+    sizePop.addEventListener('click', function (ev) {
+      var opt = ev.target.closest('.tsize-opt');
+      if (!opt) return;
+      var px = parseInt(opt.dataset.s, 10);
+      sizeSelect.value = px;
+      restoreSel();
+      applyFontSize(px);
+      lastAction = function () { applyFontSize(px); };
+      sizePop.classList.remove('open');
+    });
+  })();
 
   /* ---------- Color palette (Google Sheets style) ---------- */
   function buildGrid(el) {
@@ -574,6 +625,7 @@
     var ps = toolbar.querySelectorAll('.color-pop.open');
     for (var i = 0; i < ps.length; i++) ps[i].classList.remove('open');
     if (linkPop) linkPop.classList.remove('open');
+    if (sizePop) sizePop.classList.remove('open');
   }
   function doColor(kind, color) {
     editor.focus();
@@ -700,6 +752,8 @@
       else if (c === 'KeyC') exec('code');
       else if (c === 'Digit7') exec('ol');
       else if (c === 'Digit8') exec('ul');
+      else if (c === 'Period') changeFontSize(1);     // Ctrl+Shift+.  increase font size
+      else if (c === 'Comma') changeFontSize(-1);     // Ctrl+Shift+,  decrease font size
       else if (c === 'KeyZ') { document.execCommand('redo'); onChange(); }
       else handled = false;
     } else {

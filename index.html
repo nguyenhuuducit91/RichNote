@@ -10,6 +10,16 @@
   <div id="app" class="app">
     <!-- Menu bar -->
     <div class="menubar" id="menubar">
+      <div class="menu-tools">
+        <button class="tbtn" data-cmd="undo" title="Undo (Ctrl+Z)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M4 7h6a3.5 3.5 0 1 1 0 7H6"/><path d="M6.5 4.5 4 7l2.5 2.5"/></svg>
+        </button>
+        <button class="tbtn" data-cmd="redo" title="Redo (Ctrl+Y)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M12 7H6a3.5 3.5 0 1 0 0 7h4"/><path d="M9.5 4.5 12 7 9.5 9.5"/></svg>
+        </button>
+      </div>
+      <span class="tsep menu-tsep"></span>
+
       <div class="menu" data-menu="edit">
         <button class="menu-title" type="button">Edit</button>
         <div class="menu-dropdown">
@@ -78,16 +88,6 @@
     <div class="toolbar" id="toolbar">
 
       <div class="tgroup">
-        <button class="tbtn" data-cmd="undo" title="Undo (Ctrl+Z)">
-          <svg class="ico" viewBox="0 0 16 16"><path d="M4 7h6a3.5 3.5 0 1 1 0 7H6"/><path d="M6.5 4.5 4 7l2.5 2.5"/></svg>
-        </button>
-        <button class="tbtn" data-cmd="redo" title="Redo (Ctrl+Y)">
-          <svg class="ico" viewBox="0 0 16 16"><path d="M12 7H6a3.5 3.5 0 1 0 0 7h4"/><path d="M9.5 4.5 12 7 9.5 9.5"/></svg>
-        </button>
-      </div>
-      <span class="tsep"></span>
-
-      <div class="tgroup">
         <select class="tsel tsel-style" id="styleSelect" title="Paragraph style">
           <option value="P">Normal text</option>
           <option value="H1">Heading 1</option>
@@ -108,17 +108,15 @@
           <option value="'Courier New', monospace">Courier New</option>
           <option value="'Comic Sans MS', cursive">Comic Sans</option>
         </select>
-        <select class="tsel tsel-sm" id="sizeSelect" title="Font size">
-          <option value="" disabled>Size</option>
-          <option value="12" selected>12</option>
-          <option value="14">14</option>
-          <option value="16">16</option>
-          <option value="18">18</option>
-          <option value="20">20</option>
-          <option value="24">24</option>
-          <option value="28">28</option>
-          <option value="32">32</option>
-        </select>
+        <span class="tsize-wrap">
+          <input class="tsel tsel-sm tsel-num" id="sizeSelect" type="text" inputmode="numeric"
+                 value="12" autocomplete="off"
+                 title="Font size — type a value or pick one (Ctrl+Shift+. / Ctrl+Shift+, to increase / decrease)" />
+          <button class="tsize-arrow" id="sizeArrow" type="button" tabindex="-1" aria-label="Font sizes">
+            <svg viewBox="0 0 10 6" width="10" height="6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="tsize-pop" id="sizePop"></div>
+        </span>
       </div>
       <span class="tsep"></span>
 
@@ -238,7 +236,7 @@
       <div class="about-head">
         <div class="about-logo"><img src="Images/icon.svg" alt="RichNote" /></div>
         <div>
-          <h2 class="about-title">RichNote <span class="about-ver" id="aboutVer">v1.1.3</span></h2>
+          <h2 class="about-title">RichNote <span class="about-ver" id="aboutVer">v1.1.4</span></h2>
           <p class="about-tagline">A beautiful WYSIWYG editor for Standard Notes</p>
         </div>
       </div>

@@ -67,6 +67,7 @@ Standard Notes loads editors from a URL, so the fastest way is to use the hosted
 | `Shift+Alt+↑ / ↓` | Add cursor above / below | `Alt+Click` | Add / remove a cursor |
 | `Ctrl+F` | Find | `Alt+Enter` | Select all matches (multi‑cursor) |
 | `↑ ↓ ← →` (with cursors) | Move every cursor | `Shift+↑↓←→ / Home / End` | Select at every cursor |
+| `Ctrl+Shift+.` | Increase font size | `Ctrl+Shift+,` | Decrease font size |
 | `Esc` | Collapse to one cursor | | |
 
 `Ctrl` = `Cmd` on macOS.

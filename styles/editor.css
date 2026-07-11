@@ -83,6 +83,11 @@ html, body {
 .menu-title:hover { background: var(--tb-hover); }
 .menu.open .menu-title { background: var(--np-accent-soft); color: var(--np-accent); }
 
+/* Undo / Redo buttons hosted in the menu bar (far left) */
+.menu-tools { display: flex; align-items: center; gap: 2px; padding-left: 2px; }
+.menu-tools .tbtn { height: 26px; min-width: 30px; }
+.menubar .tsep { align-self: center; }
+
 .menu-dropdown {
   display: none;
   position: absolute;
@@ -95,6 +100,10 @@ html, body {
   border: 1px solid var(--np-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(16,24,40,.14);
+  /* Never taller than the viewport — scroll if the menu (e.g. Format) is long */
+  max-height: calc(100vh - 44px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .menu.open .menu-dropdown { display: block; }
 
@@ -218,6 +227,58 @@ html, body {
 .tsel:focus  { outline: none; border-color: var(--np-accent); box-shadow: 0 0 0 2px rgba(47,111,219,.15); }
 .tsel-sm { padding-right: 20px; min-width: 56px; }
 .tsel-style { min-width: 116px; font-weight: 600; }
+/* Editable font-size box (type a value) + a custom, JS-positioned dropdown */
+.tsize-wrap { position: relative; display: inline-flex; flex: 0 0 auto; }
+.tsel-num {
+  background-image: none;      /* plain text input, not a native <select> */
+  padding: 0 18px 0 7px;       /* room for the dropdown arrow on the right */
+  width: 60px;
+  min-width: 50px;
+  text-align: left;
+}
+.tsize-arrow {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  bottom: 1px;
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tb-btn-fg);
+  cursor: pointer;
+}
+.tsize-arrow:hover { color: var(--np-accent); }
+.tsize-pop {
+  display: none;
+  position: fixed;
+  z-index: 60;
+  min-width: 60px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--np-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16,24,40,.14);
+}
+.tsize-pop.open { display: block; }
+.tsize-opt {
+  display: block;
+  width: 100%;
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--np-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 5px;
+}
+.tsize-opt:hover { background: var(--np-accent-soft); }
 
 /* Text/highlight color buttons + palette */
 .tcolor-wrap { position: relative; display: inline-flex; flex: 0 0 auto; }
@@ -730,6 +791,9 @@ html, body {
   .modal-close { width: 38px; height: 38px; }
   .link-input, .mc-find-input { font-size: 16px; }
   .mc-find-btn { height: 34px; min-width: 34px; }
+  .tsize-opt { padding: 9px 14px; }
+  .tsize-arrow { width: 20px; }
+  .tsel-num { padding-right: 22px; }
 }
 
 /* Phones / narrow viewports */
@@ -737,7 +801,10 @@ html, body {
   .menubar { font-size: 14px; padding: 0 4px; }
   .menu-title { padding: 0 8px; }
   .menu-key { display: none; }                 /* shortcuts are keyboard-only */
-  .menu-dropdown { min-width: 168px; }
+  /* Compact dropdowns so long menus (Format) fit shorter screens; scroll if needed */
+  .menu-dropdown { min-width: 168px; padding: 3px; max-height: calc(100vh - 40px); }
+  .menu-item { padding: 6px 10px; }            /* shorter rows than the touch default */
+  .menu-sep { margin: 3px 0; }
 
   .toolbar { padding: 5px 6px; gap: 1px; }
   .tsep { margin: 0 2px; }
