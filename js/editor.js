@@ -766,6 +766,8 @@
       case 'clear':     clearFormat(); return;
       case 'wrap':      toggleWrap(); return;
       case 'minimap':   if (window.__richnoteMinimap) window.__richnoteMinimap.toggle(); return;
+      case 'find':        if (window.__richnoteFind) window.__richnoteFind.open(); return;
+      case 'findReplace': if (window.__richnoteFind) window.__richnoteFind.openReplace(); return;
       case 'toggleToolbar': toggleToolbar(); return;
     }
     onChange();
@@ -988,6 +990,8 @@
       paste: s('<rect x="3.5" y="3" width="9" height="11" rx="1.5"/><rect x="5.5" y="1.9" width="5" height="2.5" rx="1"/>'),
       pasteValue: s('<rect x="3.5" y="3" width="9" height="11" rx="1.5"/><rect x="5.5" y="1.9" width="5" height="2.5" rx="1"/><path d="M5.7 7.6h4.6M5.7 10h3"/>'),
       selectAll: s('<rect x="2.6" y="2.6" width="10.8" height="10.8" rx="1.5" stroke-dasharray="2.3 1.7"/>'),
+      find: s('<circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/>'),
+      findReplace: s('<path d="M3 6.5A4.5 4.5 0 0 1 11 4l1.6 1.6"/><path d="M12.8 3v3h-3"/><path d="M13 9.5A4.5 4.5 0 0 1 5 12l-1.6-1.6"/><path d="M3.2 13v-3h3"/>'),
       bold: g('B', 'font-weight:800'),
       italic: g('I', 'font-style:italic'),
       underline: g('U', 'text-decoration:underline'),

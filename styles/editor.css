@@ -1122,16 +1122,19 @@ a.about-row:hover { background: var(--np-accent-soft); }
   .gutter { font-size: 11px; }
   .gutter .ln { font-size: 11px; left: 2px; right: 3px; opacity: .85; }
 
-  /* Find bar spans the width instead of a fixed 180px input */
+  /* Find / Replace bar spans the width instead of a fixed 190px input */
   .mc-find {
     left: 8px;
     right: 8px;
     top: 6px;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    gap: 4px;
   }
+  .mc-find-cols { flex: 1 1 auto; min-width: 0; }
+  .mc-find-row { flex-wrap: wrap; row-gap: 6px; }
   .mc-find-ico { display: none; }
-  .mc-find-input { flex: 1 1 100%; width: auto; min-width: 0; }
+  .mc-find-input,
+  .mc-replace-input { flex: 1 1 120px; width: auto; min-width: 0; }
+  .mc-find-count { min-width: 34px; }
 
   .modal { border-radius: 14px; }
   .modal:not(.about-modal) { padding: 18px 16px 14px; }

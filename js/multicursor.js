@@ -412,6 +412,13 @@
   }
   function findOpen() { return findBar && findBar.classList.contains('open'); }
 
+  // Exposed so the menu (Edit → Find / Find & Replace) can open the bar on devices
+  // without a keyboard (mobile). openReplace also expands the Replace row.
+  window.__richnoteFind = {
+    open: function () { openFind(); },
+    openReplace: function () { openFind(); if (findBar) findBar.classList.add('mc-find-expanded'); }
+  };
+
   // Flatten editor text nodes so we can map a global string index back to (node, offset)
   function textIndex() {
     var walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null);

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="Images/icon.png" alt="RichNote" width="96" />
+<img src="img/icon.png" alt="RichNote" width="96" />
 
 # RichNote
 
@@ -13,7 +13,7 @@ A fast, beautiful **WYSIWYG editor** for [Standard Notes](https://standardnotes.
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Made in Vietnam](https://img.shields.io/badge/made%20in-Vietnam%20%F0%9F%87%BB%F0%9F%87%B3-red)
 
-<img src="Images/screenshot.png" alt="RichNote screenshot" width="820" />
+<img src="img/screenshot.png" alt="RichNote screenshot" width="820" />
 
 </div>
 
@@ -84,8 +84,8 @@ RichNote is **free and open‑source**. If it makes your notes nicer, please con
 
 <table>
 <tr>
-<td align="center"><img src="Images/qr-code-bank-donate.png" alt="Bank donate QR code" width="200" /><br/><b>Bank</b></td>
-<td align="center"><img src="Images/paypal.png" alt="PayPal donate QR code" width="200" /><br/><b>PayPal</b></td>
+<td align="center"><img src="img/qr-code-bank-donate.png" alt="Bank donate QR code" width="200" /><br/><b>Bank</b></td>
+<td align="center"><img src="img/paypal.png" alt="PayPal donate QR code" width="200" /><br/><b>PayPal</b></td>
 </tr>
 </table>
 
@@ -119,7 +119,7 @@ RichNote/
 ├── js/editor.js              # Editor logic + ComponentRelay integration
 ├── js/multicursor.js         # Multi-cursor & Find (Sublime-style)
 ├── vendor/component-relay.js # Standard Notes bridge library
-├── Images/                   # Screenshot + donate QR
+├── img/                   # Screenshot + donate QR
 └── LICENSE                   # MIT
 ```
 

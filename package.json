@@ -1,6 +1,6 @@
 {
   "name": "richnote",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "A beautiful WYSIWYG rich-text editor for Standard Notes (light theme, Word-like toolbar, line numbers, shortcuts).",
   "keywords": [
     "standard-notes",
@@ -24,6 +24,6 @@
   "scripts": {
     "start": "npx --yes http-server . -p 8080 -c-1 --cors",
     "version:stamp": "node scripts/stamp-version.mjs",
-    "build": "npm run version:stamp && rm -f RichNote.zip && zip -r RichNote.zip index.html ext.json styles js vendor Images LICENSE -x '*/.DS_Store' '*/.*'"
+    "build": "npm run version:stamp && rm -f RichNote.zip && zip -r RichNote.zip index.html ext.json styles js vendor img LICENSE -x '*/.DS_Store' '*/.*'"
   }
 }
