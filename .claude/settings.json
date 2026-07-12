@@ -16,7 +16,8 @@
       "Bash(google-chrome --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --virtual-time-budget=1800 --window-size=900,240 --screenshot=/tmp/claude-1000/-media-DATA-PROJECT-ME-StandardNotes-RichNote/a7ef1bfb-9a5c-4c01-9988-8bb10ac37426/scratchpad/shot_code_dark.png file:///tmp/claude-1000/-media-DATA-PROJECT-ME-StandardNotes-RichNote/a7ef1bfb-9a5c-4c01-9988-8bb10ac37426/scratchpad/hcode_dark.html)",
       "Bash(google-chrome --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --virtual-time-budget=2000 --window-size=900,300 --dump-dom file:///tmp/claude-1000/-media-DATA-PROJECT-ME-StandardNotes-RichNote/a7ef1bfb-9a5c-4c01-9988-8bb10ac37426/scratchpad/hpaste.html)",
       "Bash(google-chrome --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --virtual-time-budget=1500 --window-size=700,420 --screenshot=/tmp/claude-1000/-media-DATA-PROJECT-ME-StandardNotes-RichNote/a7ef1bfb-9a5c-4c01-9988-8bb10ac37426/scratchpad/shot_menu.png file:///tmp/claude-1000/-media-DATA-PROJECT-ME-StandardNotes-RichNote/a7ef1bfb-9a5c-4c01-9988-8bb10ac37426/scratchpad/hmenu.html)",
-      "Bash(google-chrome --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --virtual-time-budget=1500 --window-size=700,420 --dump-dom file:///tmp/claude-1000/-media-DATA-PROJECT-ME-StandardNotes-RichNote/a7ef1bfb-9a5c-4c01-9988-8bb10ac37426/scratchpad/hmenu.html)"
+      "Bash(google-chrome --headless=new --disable-gpu --no-sandbox --allow-file-access-from-files --virtual-time-budget=1500 --window-size=700,420 --dump-dom file:///tmp/claude-1000/-media-DATA-PROJECT-ME-StandardNotes-RichNote/a7ef1bfb-9a5c-4c01-9988-8bb10ac37426/scratchpad/hmenu.html)",
+      "Bash(node scripts/stamp-version.mjs)"
     ]
   }
 }
