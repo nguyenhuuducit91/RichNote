@@ -309,6 +309,52 @@ html, body {
 }
 .tsize-opt:hover { background: var(--np-accent-soft); }
 
+/* Subscript / superscript buttons */
+.tbtn-supsub { font-weight: 600; font-size: 12px; }
+.tbtn-supsub sub, .tbtn-supsub sup { font-size: 8px; font-weight: 700; }
+
+/* Reusable toolbar dropdown (align / lists / indent / more-formatting) */
+.tdrop { position: relative; display: inline-flex; flex: 0 0 auto; }
+.tdrop-btn { gap: 2px; padding: 0 4px; }
+.tdrop-cur { display: inline-flex; }
+.tdrop-cur .ico { width: 16px; height: 16px; display: block; }
+.tdrop-caret { opacity: .55; flex: 0 0 auto; }
+.tdrop-pop {
+  display: none;
+  position: fixed;
+  z-index: 60;
+  padding: 4px;
+  gap: 2px;
+  background: var(--np-bg);
+  border: 1px solid var(--np-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16,24,40,.14);
+}
+.tdrop-pop.open { display: flex; }
+.tdrop-opt {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tb-btn-fg);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.tdrop-opt:hover { background: var(--tb-hover); }
+.tdrop-opt.active {
+  background: var(--np-accent-soft);
+  border-color: var(--np-accent);
+  color: var(--np-accent);
+}
+.tdrop-opt .ico { width: 16px; height: 16px; display: block; }
+
 /* Text/highlight color buttons + palette */
 .tcolor-wrap { position: relative; display: inline-flex; flex: 0 0 auto; }
 .tcolor {
@@ -763,16 +809,24 @@ a.about-row:hover { background: var(--np-accent-soft); }
   color: color-mix(in srgb, var(--np-fg) 74%, var(--np-bg));
 }
 .doc ul, .doc ol { padding-left: calc(var(--np-pad-x) + var(--indent, 0px) + 1.6em); }
+/* Inline code — a subtle accent-tinted pill that adapts to light & dark themes */
 .doc code {
   font-family: var(--np-mono);
-  font-size: .92em;
-  background: color-mix(in srgb, var(--np-fg) 9%, transparent);
-  padding: .1em .35em;
-  border-radius: 3px;
+  font-size: .88em;
+  color: color-mix(in srgb, var(--np-accent) 55%, var(--np-fg));
+  background: color-mix(in srgb, var(--np-accent) 10%, var(--np-bg));
+  border: 1px solid color-mix(in srgb, var(--np-accent) 22%, transparent);
+  padding: .1em .4em;
+  border-radius: 6px;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--np-fg) 6%, transparent);
+  white-space: break-spaces;
 }
 .doc a { color: var(--np-accent); }
 .doc.mod-down a { cursor: pointer; }   /* hand cursor only while Ctrl/Cmd is held */
 .doc :where(b, strong) { font-weight: 700; }
+.doc :where(sub, sup) { font-size: .75em; line-height: 0; }
+.doc sub { vertical-align: sub; }
+.doc sup { vertical-align: super; }
 
 /* ============================================================
    STATUS BAR
@@ -886,15 +940,25 @@ a.about-row:hover { background: var(--np-accent-soft); }
 }
 @keyframes mc-blink { 0% { opacity: 1; } 50% { opacity: 0; } }
 
-/* Find bar — floats at the top-right of the editor area */
+/* Live highlight of every Find match (CSS Custom Highlight API) */
+::highlight(rn-find) {
+  background-color: rgba(255, 196, 0, .40);
+  color: inherit;
+}
+::highlight(rn-find-current) {
+  background-color: rgba(255, 138, 0, .85);
+  color: #1f2328;
+}
+
+/* Find / Replace bar — floats at the top-right of the editor area */
 .mc-find {
   position: absolute;
   top: 10px;
   right: 16px;
   z-index: 30;
   display: none;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 4px;
   padding: 7px 8px;
   background: var(--np-bg);
   border: 1px solid var(--np-border);
@@ -905,6 +969,29 @@ a.about-row:hover { background: var(--np-accent-soft); }
   animation: modal-in 140ms cubic-bezier(.2,.8,.25,1);
 }
 .mc-find.open { display: flex; }
+.mc-find-cols { display: flex; flex-direction: column; gap: 6px; }
+.mc-find-row { display: flex; align-items: center; gap: 6px; }
+/* Replace row is hidden until the toggle chevron expands it */
+.mc-replace-row { display: none; }
+.mc-find.mc-find-expanded .mc-replace-row { display: flex; }
+/* Toggle chevron rotates to point down when the replace row is open */
+.mc-find-toggle {
+  height: 30px;
+  width: 20px;
+  margin-top: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--np-gutter-fg);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.mc-find-toggle:hover { background: var(--tb-hover); color: var(--np-accent); }
+.mc-find-toggle .ico { width: 14px; height: 14px; transition: transform 140ms ease; }
+.mc-find.mc-find-expanded .mc-find-toggle .ico { transform: rotate(90deg); }
 .mc-find-ico { display: inline-flex; align-items: center; color: var(--np-gutter-fg); padding-left: 3px; }
 .mc-find-ico .ico { width: 15px; height: 15px; }
 .mc-find-input {
@@ -953,6 +1040,22 @@ a.about-row:hover { background: var(--np-accent-soft); }
 }
 .mc-find-all:hover { background: var(--np-accent-soft); }
 .mc-find-close .ico { width: 13px; height: 13px; }
+
+/* Replace row */
+.mc-replace-input {
+  width: 190px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--np-border);
+  border-radius: 8px;
+  background: var(--np-bg);
+  color: var(--np-fg);
+  font: inherit;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.mc-replace-input:focus { border-color: var(--np-accent); box-shadow: 0 0 0 3px rgba(47,111,219,.15); }
+.mc-replace-all { font-weight: 600; }
 
 /* ============================================================
    RESPONSIVE / MOBILE

@@ -298,44 +298,99 @@
   /* ============================================================
      FIND BAR
      ============================================================ */
-  var findBar = null, findInput = null, findCount = null;
+  var findBar = null, findInput = null, findCount = null, replaceInput = null;
   var matches = [];       // [{start:{node,off}, end:{node,off}}]
   var matchIndex = -1;
+
+  /* All-match highlighting via the CSS Custom Highlight API (paints every match as you
+     type — stays visible even while focus is in the Find input). Degrades gracefully:
+     when the API is missing, only the current match's native selection shows. */
+  var findHi = null, findHiCur = null;
+  if (window.CSS && CSS.highlights && window.Highlight) {
+    try {
+      findHi = new Highlight();
+      findHiCur = new Highlight();
+      CSS.highlights.set('rn-find', findHi);
+      CSS.highlights.set('rn-find-current', findHiCur);
+    } catch (e) { findHi = findHiCur = null; }
+  }
+  function clearHighlights() {
+    if (findHi) findHi.clear();
+    if (findHiCur) findHiCur.clear();
+  }
+  function paintHighlights() {
+    if (!findHi) return;
+    findHi.clear();
+    for (var i = 0; i < matches.length; i++) findHi.add(rangeOf(matches[i]));
+  }
+  function paintCurrent() {
+    if (!findHiCur) return;
+    findHiCur.clear();
+    if (matchIndex >= 0 && matchIndex < matches.length) findHiCur.add(rangeOf(matches[matchIndex]));
+  }
 
   function buildFindBar() {
     findBar = document.createElement('div');
     findBar.className = 'mc-find';
     findBar.innerHTML =
-      '<span class="mc-find-ico"><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></span>' +
-      '<input type="text" class="mc-find-input" placeholder="Find in note…" spellcheck="false" />' +
-      '<span class="mc-find-count">0/0</span>' +
-      '<span class="mc-find-sep"></span>' +
-      '<button type="button" class="mc-find-btn" data-act="prev" title="Previous (Shift+Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button>' +
-      '<button type="button" class="mc-find-btn" data-act="next" title="Next (Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>' +
-      '<button type="button" class="mc-find-btn mc-find-all" data-act="all" title="Select all matches (Alt+Enter)">Select all</button>' +
-      '<button type="button" class="mc-find-btn mc-find-close" data-act="close" title="Close (Esc)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>';
+      '<button type="button" class="mc-find-toggle" data-act="toggle" title="Toggle Replace"><svg class="ico" viewBox="0 0 16 16"><path d="M6 5l3 3-3 3"/></svg></button>' +
+      '<div class="mc-find-cols">' +
+        '<div class="mc-find-row">' +
+          '<span class="mc-find-ico"><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></span>' +
+          '<input type="text" class="mc-find-input" placeholder="Find in note…" spellcheck="false" />' +
+          '<span class="mc-find-count">0/0</span>' +
+          '<span class="mc-find-sep"></span>' +
+          '<button type="button" class="mc-find-btn" data-act="prev" title="Previous (Shift+Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button>' +
+          '<button type="button" class="mc-find-btn" data-act="next" title="Next (Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>' +
+          '<button type="button" class="mc-find-btn mc-find-all" data-act="all" title="Select all matches (Alt+Enter)">Select all</button>' +
+          '<button type="button" class="mc-find-btn mc-find-close" data-act="close" title="Close (Esc)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>' +
+        '</div>' +
+        '<div class="mc-find-row mc-replace-row">' +
+          '<span class="mc-find-ico"><svg class="ico" viewBox="0 0 16 16"><path d="M3 6.5A4.5 4.5 0 0 1 11 4l1.6 1.6"/><path d="M12.8 3v3h-3"/><path d="M13 9.5A4.5 4.5 0 0 1 5 12l-1.6-1.6"/><path d="M3.2 13v-3h3"/></svg></span>' +
+          '<input type="text" class="mc-replace-input" placeholder="Replace with…" spellcheck="false" />' +
+          '<span class="mc-find-sep"></span>' +
+          '<button type="button" class="mc-find-btn" data-act="replace" title="Replace (Enter)">Replace</button>' +
+          '<button type="button" class="mc-find-btn mc-replace-all" data-act="replaceAll" title="Replace all (Alt+Enter)">All</button>' +
+        '</div>' +
+      '</div>';
     (editorArea || document.body).appendChild(findBar);
     findInput = findBar.querySelector('.mc-find-input');
     findCount = findBar.querySelector('.mc-find-count');
+    replaceInput = findBar.querySelector('.mc-replace-input');
 
-    findInput.addEventListener('input', function () { computeMatches(); if (matches.length) gotoMatch(0); });
+    findInput.addEventListener('input', function () { computeMatches(); if (matches.length) gotoMatch(0); else paintCurrent(); });
     findInput.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter' && ev.altKey) { ev.preventDefault(); selectAllMatches(); }
       else if (ev.key === 'Enter') { ev.preventDefault(); gotoMatch(matchIndex + (ev.shiftKey ? -1 : 1)); }
       else if (ev.key === 'Escape') { ev.preventDefault(); closeFind(); }
     });
+    replaceInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && ev.altKey) { ev.preventDefault(); replaceAll(); }
+      else if (ev.key === 'Enter') { ev.preventDefault(); replaceOne(); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); closeFind(); }
+    });
     findBar.addEventListener('mousedown', function (ev) {
-      // keep the editor selection when clicking buttons
-      if (ev.target.closest('.mc-find-btn')) ev.preventDefault();
+      // keep the editor selection/caret when clicking buttons
+      if (ev.target.closest('.mc-find-btn, .mc-find-toggle')) ev.preventDefault();
     });
     findBar.addEventListener('click', function (ev) {
-      var btn = ev.target.closest('.mc-find-btn'); if (!btn) return;
+      var btn = ev.target.closest('.mc-find-btn, .mc-find-toggle'); if (!btn) return;
       var act = btn.dataset.act;
       if (act === 'next') gotoMatch(matchIndex + 1);
       else if (act === 'prev') gotoMatch(matchIndex - 1);
       else if (act === 'all') selectAllMatches();
+      else if (act === 'replace') replaceOne();
+      else if (act === 'replaceAll') replaceAll();
+      else if (act === 'toggle') toggleReplace();
       else if (act === 'close') closeFind();
     });
+  }
+
+  function toggleReplace(force) {
+    if (!findBar) return;
+    var on = (force === undefined) ? !findBar.classList.contains('mc-find-expanded') : force;
+    findBar.classList.toggle('mc-find-expanded', on);
+    if (on && replaceInput) { replaceInput.focus(); replaceInput.select(); }
   }
 
   function openFind() {
@@ -352,6 +407,7 @@
     if (!findBar) return;
     findBar.classList.remove('open');
     matches = []; matchIndex = -1;
+    clearHighlights();
     editor.focus();
   }
   function findOpen() { return findBar && findBar.classList.contains('open'); }
@@ -393,7 +449,7 @@
   function computeMatches() {
     matches = []; matchIndex = -1;
     var q = findInput ? findInput.value : '';
-    if (!q) { if (findCount) findCount.textContent = '0/0'; return; }
+    if (!q) { if (findCount) findCount.textContent = '0/0'; clearHighlights(); return; }
     var idx = textIndex();
     var hay = idx.text.toLowerCase(), needle = q.toLowerCase();
     var from = 0, at;
@@ -404,6 +460,7 @@
       from = at + Math.max(1, q.length);
     }
     if (findCount) findCount.textContent = (matches.length ? 1 : 0) + '/' + matches.length;
+    paintHighlights();   // highlight every match live as the user types
   }
   function rangeOf(m) {
     var r = document.createRange();
@@ -415,14 +472,72 @@
     if (!matches.length) return;
     matchIndex = ((i % matches.length) + matches.length) % matches.length;
     var r = rangeOf(matches[matchIndex]);
+    // Setting a selection inside the contenteditable steals focus from the Find/Replace
+    // input (so the next keystroke would land in the editor). Remember the focused field
+    // and restore it — the current match stays visible via the Highlight API.
+    var active = document.activeElement;
+    var keepFocus = findBar && findBar.contains(active) ? active : null;
     sel.removeAllRanges(); sel.addRange(r);
     var rect = r.getBoundingClientRect();
     var host = editor.getBoundingClientRect();
     if (rect.top < host.top || rect.bottom > host.bottom) {
       editor.scrollTop += rect.top - host.top - host.height / 2;
     }
+    paintCurrent();
+    if (keepFocus) keepFocus.focus();
     if (findCount) findCount.textContent = (matchIndex + 1) + '/' + matches.length;
   }
+
+  /* ---------- Replace ---------- */
+  // insertText keeps the browser undo stack and fires 'input' (editor.js auto-saves).
+  // It targets the active editable, so we focus the editor and set the selection first.
+  function replaceOne() {
+    if (!matches.length) return;
+    if (matchIndex < 0) { gotoMatch(0); return; }
+    var repl = replaceInput ? replaceInput.value : '';
+    var keep = matchIndex;
+    var r = rangeOf(matches[matchIndex]);
+    editor.focus();
+    sel.removeAllRanges(); sel.addRange(r);
+    document.execCommand('insertText', false, repl);
+    computeMatches();
+    if (matches.length) gotoMatch(keep <= matches.length - 1 ? keep : 0);
+    else { matchIndex = -1; clearHighlights(); if (findCount) findCount.textContent = '0/0'; }
+    if (replaceInput) replaceInput.focus();
+  }
+  function replaceAll() {
+    var q = findInput ? findInput.value : '';
+    if (!q) return;
+    var repl = replaceInput ? replaceInput.value : '';
+    // Collect every match's GLOBAL start index up-front, then replace LAST → FIRST so
+    // earlier indices stay accurate; re-resolve (node, offset) from a fresh text map each
+    // time so node splits/merges from execCommand can't invalidate a stale Range.
+    var idx = textIndex();
+    var hay = idx.text.toLowerCase(), needle = q.toLowerCase();
+    var starts = [], from = 0, at;
+    while ((at = hay.indexOf(needle, from)) !== -1) {
+      var s = locateStart(at, idx.nodes), e = locateEnd(at + q.length, idx.nodes);
+      if (s && e && topBlockOf(s.node) === topBlockOf(e.node)) starts.push(at);
+      from = at + Math.max(1, q.length);
+    }
+    if (!starts.length) return;
+    editor.focus();
+    for (var i = starts.length - 1; i >= 0; i--) {
+      var map = textIndex();
+      var ss = locateStart(starts[i], map.nodes);
+      var ee = locateEnd(starts[i] + q.length, map.nodes);
+      if (!ss || !ee) continue;
+      var rr = document.createRange();
+      rr.setStart(ss.node, ss.off); rr.setEnd(ee.node, ee.off);
+      sel.removeAllRanges(); sel.addRange(rr);
+      document.execCommand('insertText', false, repl);
+    }
+    computeMatches();
+    if (matches.length) gotoMatch(0);
+    else { matchIndex = -1; clearHighlights(); if (findCount) findCount.textContent = '0/0'; }
+    if (replaceInput) replaceInput.focus();
+  }
+
   function selectAllMatches() {
     if (!matches.length) return;
     carets = matches.map(rangeOf);

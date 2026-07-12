@@ -30,6 +30,16 @@
   var sizePop     = document.getElementById('sizePop');
   var foreBar     = document.getElementById('foreBar');
   var backBar     = document.getElementById('backBar');
+  var alignBtn    = document.getElementById('alignBtn');
+  var alignPop    = document.getElementById('alignPop');
+  var alignCur    = document.getElementById('alignCur');
+  var fmtBtn      = document.getElementById('fmtBtn');
+  var fmtPop      = document.getElementById('fmtPop');
+  var listBtn     = document.getElementById('listBtn');
+  var listPop     = document.getElementById('listPop');
+  var listCur     = document.getElementById('listCur');
+  var indentBtn   = document.getElementById('indentBtn');
+  var indentPop   = document.getElementById('indentPop');
   var linkPop     = document.getElementById('linkPop');
   var linkInput   = document.getElementById('linkInput');
   var linkApply   = document.getElementById('linkApply');
@@ -66,9 +76,9 @@
 
   // Formatting commands that F4 can repeat
   var REPEATABLE = {
-    bold: 1, italic: 1, underline: 1, strike: 1, code: 1,
+    bold: 1, italic: 1, underline: 1, strike: 1, sub: 1, super: 1, code: 1,
     h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, p: 1, quote: 1,
-    left: 1, center: 1, right: 1, ul: 1, ol: 1, indent: 1, outdent: 1, clear: 1
+    left: 1, center: 1, right: 1, justify: 1, ul: 1, ol: 1, indent: 1, outdent: 1, clear: 1
   };
 
   /* ---------- Utilities ---------- */
@@ -121,7 +131,7 @@
   }
   /* ---------- Formatted paste (keep bold/colors/links) with sanitising ---------- */
   var PASTE_TAGS = { P:1, DIV:1, BR:1, SPAN:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, DEL:1,
-    MARK:1, CODE:1, PRE:1, A:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1, FONT:1 };
+    MARK:1, CODE:1, PRE:1, A:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1, FONT:1, SUB:1, SUP:1 };
   var STYLE_KEEP = ['color', 'background-color', 'font-weight', 'font-style',
     'text-decoration', 'text-decoration-line', 'font-size', 'font-family'];
 
@@ -223,17 +233,16 @@
     else insertPastedText(box.textContent);
   }
 
-  // Read the clipboard and paste. formatted=true keeps HTML formatting; formatted=false
-  // pastes plain text ("value only") but still uses the HTML block structure (one line
-  // per block) so multi-paragraph copies don't gain blank lines.
-  function pasteFromClipboard(formatted) {
-    editor.focus();
+  // Async Clipboard API read — the last-resort fallback for normal browsers where
+  // execCommand('paste') is disabled AND no native paste event fires (menu click).
+  // formatted=true keeps HTML formatting; formatted=false pastes value only.
+  function asyncClipboardPaste(formatted) {
     var clip = navigator.clipboard;
     function readPlain() {
       if (clip && clip.readText) {
         clip.readText().then(function (t) { (formatted ? insertPastedText : insertValueText)(t); })
-          .catch(function () { try { document.execCommand('paste'); } catch (e) {} });
-      } else { try { document.execCommand('paste'); } catch (e) {} }
+          .catch(function () {});
+      }
     }
     if (clip && clip.read) {
       clip.read().then(function (items) {
@@ -251,22 +260,35 @@
       readPlain();
     }
   }
+
+  // Read the clipboard and paste. formatted=true keeps HTML formatting; formatted=false
+  // pastes plain text ("value only") but still uses the HTML block structure (one line
+  // per block) so multi-paragraph copies don't gain blank lines.
+  function pasteFromClipboard(formatted) {
+    editor.focus();
+    // Electron / Standard Notes desktop: an execCommand('paste') inside the current user
+    // gesture (menu click / keydown) fires a TRUSTED 'paste' event whose clipboardData
+    // needs no permission. Electron may fire that event ASYNCHRONOUSLY, so we must keep
+    // pasteOverride set until the event actually arrives (the paste handler clears it and
+    // cancels the timer). If no paste event comes, the timer falls back to the async API.
+    armPasteOverride(formatted ? 'format' : 'plain');
+    try { document.execCommand('paste'); } catch (e) {}
+  }
   function doPaste()        { pasteFromClipboard(true); }   // default paste — keep formatting
   function pasteValueOnly() { pasteFromClipboard(false); }  // menu: Paste value only
 
-  // Ctrl+Shift+V / Ctrl+Alt+V: the async Clipboard API is often blocked inside the
-  // Standard Notes iframe (needs focus + clipboard-read permission). So instead of
-  // reading the clipboard directly, we DON'T preventDefault — we let the browser fire
-  // a trusted 'paste' event (whose clipboardData needs no permission) and tag it with
-  // the desired mode. A short fallback covers browsers that don't emit a paste event.
+  // Tag the next trusted 'paste' event with the desired mode. Used by menu paste,
+  // Ctrl+Shift+V, and execCommand('paste'). Kept armed for a short window so a paste
+  // event that Electron fires asynchronously still lands in the right mode; if none
+  // arrives, the timer falls back to the async Clipboard API (normal browsers).
   var pasteOverride = null;      // 'plain' | 'format'
   var pasteOverrideTimer = null;
   function armPasteOverride(mode) {
     pasteOverride = mode;
     if (pasteOverrideTimer) clearTimeout(pasteOverrideTimer);
     pasteOverrideTimer = setTimeout(function () {
-      if (pasteOverride === mode) { pasteOverride = null; pasteFromClipboard(mode === 'format'); }
-    }, 80);
+      if (pasteOverride === mode) { pasteOverride = null; asyncClipboardPaste(mode === 'format'); }
+    }, 200);
   }
   function blockOf(node) {
     var n = node;
@@ -390,23 +412,70 @@
       els[i].classList.toggle('disabled', !on);
     }
   }
+  /* ---------- Toolbar dropdowns (align / lists / more-format) ---------- */
+  // Toggle .active on a dropdown option (the .tdrop-opt for a given command)
+  function setOpt(pop, cmd, on) {
+    if (!pop) return;
+    var opt = pop.querySelector('.tdrop-opt[data-cmd="' + cmd + '"]');
+    if (opt) opt.classList.toggle('active', !!on);
+  }
+  var ALIGN_ICONS = {
+    left:    '<svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h12"/></svg>',
+    center:  '<svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M4 8h8M2 12h12"/></svg>',
+    right:   '<svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M6 8h8M2 12h12"/></svg>',
+    justify: '<svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12"/></svg>'
+  };
+  var LIST_ICONS = {
+    ul: '<svg class="ico" viewBox="0 0 16 16"><circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/></svg>',
+    ol: '<svg class="ico" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text></svg>'
+  };
+  function currentAlign() {
+    if (q('justifyCenter')) return 'center';
+    if (q('justifyRight'))  return 'right';
+    if (q('justifyFull'))   return 'justify';
+    return 'left';
+  }
+  function updateAlign() {
+    if (!alignBtn) return;
+    var cur = currentAlign();
+    if (alignCur) alignCur.innerHTML = ALIGN_ICONS[cur] || ALIGN_ICONS.left;
+    alignBtn.classList.toggle('active', cur !== 'left');
+    setOpt(alignPop, 'left', cur === 'left');
+    setOpt(alignPop, 'center', cur === 'center');
+    setOpt(alignPop, 'right', cur === 'right');
+    setOpt(alignPop, 'justify', cur === 'justify');
+  }
+  function updateLists() {
+    if (!listBtn) return;
+    var ul = q('insertUnorderedList'), ol = q('insertOrderedList');
+    if (listCur) listCur.innerHTML = ol ? LIST_ICONS.ol : LIST_ICONS.ul;   // reflect active list; bullet as neutral default
+    listBtn.classList.toggle('active', ul || ol);
+    setOpt(listPop, 'ul', ul);
+    setOpt(listPop, 'ol', ol);
+  }
+  function updateFmtExtra() {
+    if (!fmtBtn) return;
+    var st = q('strikeThrough'), su = q('subscript'), sp = q('superscript'), cd = inCode();
+    setOpt(fmtPop, 'strike', st);
+    setOpt(fmtPop, 'sub', su);
+    setOpt(fmtPop, 'super', sp);
+    setOpt(fmtPop, 'code', cd);
+    fmtBtn.classList.toggle('active', st || su || sp || cd);
+  }
+
   function updateToolbar() {
     setActive('bold', q('bold'));
     setActive('italic', q('italic'));
     setActive('underline', q('underline'));
-    setActive('strike', q('strikeThrough'));
-    setActive('ul', q('insertUnorderedList'));
-    setActive('ol', q('insertOrderedList'));
-    setActive('left', q('justifyLeft'));
-    setActive('center', q('justifyCenter'));
-    setActive('right', q('justifyRight'));
+    updateFmtExtra();   // strike / sub / super / code (grouped dropdown)
+    updateLists();      // bullet / numbered (grouped dropdown)
+    updateAlign();      // left / center / right / justify (grouped dropdown)
     var fb = '';
     try { fb = (document.queryCommandValue('formatBlock') || '').toLowerCase(); } catch (e) {}
     setActive('h1', fb === 'h1');
     setActive('h2', fb === 'h2');
     setActive('p', fb === 'p' || fb === 'div');
     setActive('quote', fb === 'blockquote');
-    setActive('code', inCode());
     setActive('link', !!currentLinkEl());
     setActive('wrap', wrapOn);
     if (wrapItem) wrapItem.classList.toggle('checked', wrapOn);
@@ -671,6 +740,10 @@
       case 'italic':    document.execCommand('italic'); break;
       case 'underline': document.execCommand('underline'); break;
       case 'strike':    document.execCommand('strikeThrough'); break;
+      // Emit real <sub>/<sup> (styleWithCSS would instead make a bare
+      // vertical-align span that neither shrinks the text nor survives paste).
+      case 'sub':       document.execCommand('styleWithCSS', false, false); document.execCommand('subscript');   document.execCommand('styleWithCSS', false, true); break;
+      case 'super':     document.execCommand('styleWithCSS', false, false); document.execCommand('superscript'); document.execCommand('styleWithCSS', false, true); break;
       case 'code':      toggleCode(); break;
       case 'h1':        document.execCommand('formatBlock', false, 'H1'); break;
       case 'h2':        document.execCommand('formatBlock', false, 'H2'); break;
@@ -685,6 +758,7 @@
       case 'left':      document.execCommand('justifyLeft'); break;
       case 'center':    document.execCommand('justifyCenter'); break;
       case 'right':     document.execCommand('justifyRight'); break;
+      case 'justify':   document.execCommand('justifyFull'); break;
       case 'indent':    indentBlocks(1); return;
       case 'outdent':   indentBlocks(-1); return;
       case 'link':      openLinkPop(); return;
@@ -727,7 +801,7 @@
   });
   document.addEventListener('click', function (ev) {
     if (!ev.target.closest('#menubar')) closeMenus();
-    if (!ev.target.closest('.tcolor-wrap') && !ev.target.closest('.link-wrap') && !ev.target.closest('.tsize-wrap')) closePopups();
+    if (!ev.target.closest('.tcolor-wrap') && !ev.target.closest('.link-wrap') && !ev.target.closest('.tsize-wrap') && !ev.target.closest('.tdrop')) closePopups();
   });
 
   /* ---------- Toolbar events ---------- */
@@ -740,8 +814,31 @@
   });
   toolbar.addEventListener('click', function (ev) {
     var btn = ev.target.closest('.tbtn');
-    if (btn) exec(btn.dataset.cmd);
+    if (btn && btn.dataset.cmd) exec(btn.dataset.cmd);
   });
+
+  /* ---------- Toolbar dropdowns (align / lists / indent / more-format) ---------- */
+  function wireDropdown(btn, pop) {
+    if (!btn || !pop) return;
+    btn.addEventListener('mousedown', function (ev) { ev.preventDefault(); saveSel(); });
+    btn.addEventListener('click', function () {
+      var open = pop.classList.contains('open');
+      closePopups(); closeMenus();
+      if (!open) { pop.classList.add('open'); positionPopup(pop, btn); }
+    });
+    pop.addEventListener('mousedown', function (ev) { ev.preventDefault(); });   // keep the selection
+    pop.addEventListener('click', function (ev) {
+      var opt = ev.target.closest('.tdrop-opt');
+      if (!opt) return;
+      restoreSel();
+      exec(opt.dataset.cmd);
+      pop.classList.remove('open');
+    });
+  }
+  wireDropdown(alignBtn, alignPop);
+  wireDropdown(listBtn, listPop);
+  wireDropdown(indentBtn, indentPop);
+  wireDropdown(fmtBtn, fmtPop);
 
   styleSelect.addEventListener('change', function () {
     restoreSel();
@@ -817,6 +914,8 @@
     for (var i = 0; i < ps.length; i++) ps[i].classList.remove('open');
     if (linkPop) linkPop.classList.remove('open');
     if (sizePop) sizePop.classList.remove('open');
+    var dds = toolbar.querySelectorAll('.tdrop-pop.open');
+    for (var d = 0; d < dds.length; d++) dds[d].classList.remove('open');
   }
   function doColor(kind, color) {
     editor.focus();
@@ -893,12 +992,15 @@
       italic: g('I', 'font-style:italic'),
       underline: g('U', 'text-decoration:underline'),
       strike: g('S', 'text-decoration:line-through'),
+      sub: g('X<sub>2</sub>'),
+      super: g('X<sup>2</sup>'),
       h1: g('H1'), h2: g('H2'), h3: g('H3'), h4: g('H4'), h5: g('H5'), h6: g('H6'),
       p: g('¶'),
       quote: s('<path d="M3.3 4.2v7.6" stroke-width="2"/><path d="M6.3 5.4h7M6.3 8h7M6.3 10.6h5"/>'),
       left: s('<path d="M2 4h12M2 8h8M2 12h12"/>'),
       center: s('<path d="M2 4h12M4 8h8M2 12h12"/>'),
       right: s('<path d="M2 4h12M6 8h8M2 12h12"/>'),
+      justify: s('<path d="M2 4h12M2 8h12M2 12h12"/>'),
       clear: s('<path d="M3 4.8V3.2h9v1.6"/><path d="M8 3.2 5.4 12.8"/><path d="M3.4 12.8h4"/><path d="M9.8 9.8 12.8 12.8"/><path d="M12.8 9.8 9.8 12.8"/>'),
       link: s('<path d="M6.7 9.3 9.3 6.7"/><path d="M8.4 4.6l1-1a2.7 2.7 0 0 1 3.9 3.9l-1 1"/><path d="M7.6 11.4l-1 1a2.7 2.7 0 0 1-3.9-3.9l1-1"/>'),
       ul: s('<circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/>'),
@@ -1011,7 +1113,17 @@
     } else if (ev.shiftKey) {
       if (c === 'KeyX') exec('strike');
       else if (c === 'KeyC') exec('code');
-      else if (c === 'KeyV') { armPasteOverride('plain'); handled = false; }    // Ctrl+Shift+V  paste value only
+      else if (c === 'Equal') exec('super');          // Ctrl+Shift+=  superscript
+      else if (c === 'KeyV') {                                                    // Ctrl+Shift+V  paste value only
+        // Arm 'plain', then try execCommand('paste') in this keydown gesture. In Electron/SN
+        // it fires a trusted paste event (possibly async) that the handler applies as plain →
+        // preventDefault so the browser doesn't also paste. In a normal browser execCommand is
+        // disabled (returns false) → don't preventDefault so the native paste event fires.
+        armPasteOverride('plain');
+        var okPaste = false;
+        try { okPaste = document.execCommand('paste'); } catch (e) { okPaste = false; }
+        handled = !!okPaste;
+      }
       else if (c === 'Digit7') exec('ol');
       else if (c === 'Digit8') exec('ul');
       else if (c === 'Period') changeFontSize(1);     // Ctrl+Shift+.  increase font size
@@ -1022,6 +1134,8 @@
       if (c === 'KeyL') exec('left');
       else if (c === 'KeyE') exec('center');
       else if (c === 'KeyR') exec('right');
+      else if (c === 'KeyJ') exec('justify');
+      else if (c === 'Equal') exec('sub');            // Ctrl+=  subscript
       else if (c === 'KeyK') exec('link');
       else if (c === 'Backslash') exec('clear');
       else if (c === 'KeyY') { document.execCommand('redo'); onChange(); }
