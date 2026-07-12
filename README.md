@@ -59,11 +59,23 @@ Standard Notes loads editors from a URL. Just import one of the manifests below.
 
 3. Open any note → click the **editor switcher** → choose **RichNote**. Done! 🎉
 
-> The **online** manifest carries no `download_url`, so Standard Notes loads the editor
-> directly from the hosted `index.html` — nothing to package or update locally. The
-> **packaged** manifest additionally points to `RichNote.zip` for an offline/local install.
+> The **online** manifest's `download_url` points at the hosted `index.html` (not a zip),
+> so Standard Notes runs the editor straight from GitHub Pages — nothing to package or
+> update locally. The **packaged** manifest instead points to `RichNote.zip` for an
+> offline/local install.
 
 > Custom editors may require a Standard Notes plan that supports extensions, or the self‑hosted / desktop app.
+
+### ⭐ Make RichNote the default note type
+
+So every **new** note opens in RichNote automatically:
+
+- **Per note:** open a note → click the **note‑type / editor switcher** (the editor icon in the note's toolbar) → pick **RichNote**. In that same list, open the **⋯ menu** next to RichNote (or the item's options) and choose **“Make Default”**.
+- **Or globally:** **Preferences / Settings → General → Default note type** → select **RichNote**.
+
+New notes will now use RichNote out of the box. Existing notes keep their current editor until you switch them individually.
+
+> Wording varies slightly by Standard Notes version (desktop / web / mobile), but the option always lives in the note's **editor switcher** or **Preferences → General**.
 
 ---
 
