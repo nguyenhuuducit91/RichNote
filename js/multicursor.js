@@ -306,13 +306,14 @@
     findBar = document.createElement('div');
     findBar.className = 'mc-find';
     findBar.innerHTML =
-      '<span class="mc-find-ico">🔍</span>' +
-      '<input type="text" class="mc-find-input" placeholder="Find…" spellcheck="false" />' +
+      '<span class="mc-find-ico"><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></span>' +
+      '<input type="text" class="mc-find-input" placeholder="Find in note…" spellcheck="false" />' +
       '<span class="mc-find-count">0/0</span>' +
-      '<button type="button" class="mc-find-btn" data-act="prev" title="Previous (Shift+Enter)">▲</button>' +
-      '<button type="button" class="mc-find-btn" data-act="next" title="Next (Enter)">▼</button>' +
+      '<span class="mc-find-sep"></span>' +
+      '<button type="button" class="mc-find-btn" data-act="prev" title="Previous (Shift+Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button>' +
+      '<button type="button" class="mc-find-btn" data-act="next" title="Next (Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>' +
       '<button type="button" class="mc-find-btn mc-find-all" data-act="all" title="Select all matches (Alt+Enter)">Select all</button>' +
-      '<button type="button" class="mc-find-btn mc-find-close" data-act="close" title="Close (Esc)">✕</button>';
+      '<button type="button" class="mc-find-btn mc-find-close" data-act="close" title="Close (Esc)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>';
     (editorArea || document.body).appendChild(findBar);
     findInput = findBar.querySelector('.mc-find-input');
     findCount = findBar.querySelector('.mc-find-count');

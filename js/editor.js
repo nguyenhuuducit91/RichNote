@@ -640,6 +640,22 @@
     refresh();
   }
 
+  /* ---------- Show / hide the formatting toolbar (default: shown) ---------- */
+  var toolbarOn = true;
+  try { toolbarOn = localStorage.getItem('richnote-toolbar') !== '0'; } catch (e) {}
+  function applyToolbar() {
+    var app = document.getElementById('app');
+    if (app) app.classList.toggle('toolbar-collapsed', !toolbarOn);
+    var b = document.getElementById('toolbarToggle');
+    if (b) { b.classList.toggle('collapsed', !toolbarOn); b.title = toolbarOn ? 'Hide toolbar' : 'Show toolbar'; }
+  }
+  function toggleToolbar() {
+    toolbarOn = !toolbarOn;
+    try { localStorage.setItem('richnote-toolbar', toolbarOn ? '1' : '0'); } catch (e) {}
+    applyToolbar();
+    refresh();
+  }
+
   function exec(cmd) {
     editor.focus();
     if (REPEATABLE[cmd]) lastAction = (function (c) { return function () { exec(c); }; })(cmd);
@@ -676,6 +692,7 @@
       case 'clear':     clearFormat(); return;
       case 'wrap':      toggleWrap(); return;
       case 'minimap':   if (window.__richnoteMinimap) window.__richnoteMinimap.toggle(); return;
+      case 'toggleToolbar': toggleToolbar(); return;
     }
     onChange();
   }
@@ -882,8 +899,8 @@
       left: s('<path d="M2 4h12M2 8h8M2 12h12"/>'),
       center: s('<path d="M2 4h12M4 8h8M2 12h12"/>'),
       right: s('<path d="M2 4h12M6 8h8M2 12h12"/>'),
-      clear: s('<path d="M3 13.2h9"/><path d="M8.7 3.1l4.2 4.2a1 1 0 0 1 0 1.4l-3.3 3.3H6.3L2.7 8.4a1 1 0 0 1 0-1.4l4.6-4.6a1 1 0 0 1 1.4 0z"/><path d="M6 5.8l4.2 4.2"/>'),
-      link: s('<path d="M6.8 9.2a2.6 2.6 0 0 1 0-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.1 1.1"/><path d="M9.2 6.8a2.6 2.6 0 0 1 0 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6-3.6l1.1-1.1"/>'),
+      clear: s('<path d="M3 4.8V3.2h9v1.6"/><path d="M8 3.2 5.4 12.8"/><path d="M3.4 12.8h4"/><path d="M9.8 9.8 12.8 12.8"/><path d="M12.8 9.8 9.8 12.8"/>'),
+      link: s('<path d="M6.7 9.3 9.3 6.7"/><path d="M8.4 4.6l1-1a2.7 2.7 0 0 1 3.9 3.9l-1 1"/><path d="M7.6 11.4l-1 1a2.7 2.7 0 0 1-3.9-3.9l1-1"/>'),
       ul: s('<circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/>'),
       ol: s('<path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text>'),
       wrap: s('<path d="M2 4h12M2 8h8.4a2.4 2.4 0 0 1 0 4.8H7.4"/><path d="M9.2 10.8 7.4 12.8l1.8 2"/>'),
@@ -1086,6 +1103,7 @@
     else if (mq.addListener) mq.addListener(onWrapMq);   // older engines
   });
   try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+  applyToolbar();
   ensureContent();
   connectStandardNotes();
   refresh();

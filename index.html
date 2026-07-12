@@ -17,6 +17,9 @@
         <button class="tbtn" data-cmd="redo" title="Redo (Ctrl+Y)">
           <svg class="ico" viewBox="0 0 16 16"><path d="M12 7H6a3.5 3.5 0 1 0 0 7h4"/><path d="M9.5 4.5 12 7 9.5 9.5"/></svg>
         </button>
+        <button class="tbtn tbtn-toggle" id="toolbarToggle" data-cmd="toggleToolbar" title="Hide toolbar">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M3.5 9.5 8 5l4.5 4.5"/></svg>
+        </button>
       </div>
       <span class="tsep menu-tsep"></span>
 
@@ -190,15 +193,16 @@
         </button>
         <div class="link-wrap">
           <button class="tbtn" data-cmd="link" title="Link (Ctrl+K)">
-            <svg class="ico" viewBox="0 0 16 16"><path d="M6.8 9.2a2.6 2.6 0 0 1 0-3.6l1.6-1.6a2.6 2.6 0 0 1 3.6 3.6l-1.1 1.1"/><path d="M9.2 6.8a2.6 2.6 0 0 1 0 3.6l-1.6 1.6a2.6 2.6 0 0 1-3.6-3.6l1.1-1.1"/></svg>
+            <svg class="ico" viewBox="0 0 16 16"><path d="M6.7 9.3 9.3 6.7"/><path d="M8.4 4.6l1-1a2.7 2.7 0 0 1 3.9 3.9l-1 1"/><path d="M7.6 11.4l-1 1a2.7 2.7 0 0 1-3.9-3.9l1-1"/></svg>
           </button>
           <div class="link-pop" id="linkPop">
+            <div class="link-title">Insert link</div>
             <div class="link-row">
-              <span class="link-ico">🔗</span>
-              <input type="url" id="linkInput" class="link-input" placeholder="https://..." />
+              <span class="link-ico"><svg class="ico" viewBox="0 0 16 16"><path d="M6.7 9.3 9.3 6.7"/><path d="M8.4 4.6l1-1a2.7 2.7 0 0 1 3.9 3.9l-1 1"/><path d="M7.6 11.4l-1 1a2.7 2.7 0 0 1-3.9-3.9l1-1"/></svg></span>
+              <input type="url" id="linkInput" class="link-input" placeholder="https://example.com" />
             </div>
             <div class="link-actions">
-              <button type="button" class="link-btn link-remove" id="linkRemove">Remove link</button>
+              <button type="button" class="link-btn link-remove" id="linkRemove">Remove</button>
               <button type="button" class="link-btn link-apply" id="linkApply">Apply</button>
             </div>
           </div>
@@ -208,7 +212,7 @@
 
       <div class="tgroup">
         <button class="tbtn" data-cmd="clear" title="Clear formatting (Ctrl+\)">
-          <svg class="ico" viewBox="0 0 16 16"><path d="M3 13.2h9"/><path d="M8.7 3.1l4.2 4.2a1 1 0 0 1 0 1.4l-3.3 3.3H6.3L2.7 8.4a1 1 0 0 1 0-1.4l4.6-4.6a1 1 0 0 1 1.4 0z"/><path d="M6 5.8l4.2 4.2"/></svg>
+          <svg class="ico" viewBox="0 0 16 16"><path d="M3 4.8V3.2h9v1.6"/><path d="M8 3.2 5.4 12.8"/><path d="M3.4 12.8h4"/><path d="M9.8 9.8 12.8 12.8"/><path d="M12.8 9.8 9.8 12.8"/></svg>
         </button>
       </div>
     </div>

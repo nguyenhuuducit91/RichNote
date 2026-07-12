@@ -83,10 +83,14 @@ html, body {
 .menu-title:hover { background: var(--tb-hover); }
 .menu.open .menu-title { background: var(--np-accent-soft); color: var(--np-accent); }
 
-/* Undo / Redo buttons hosted in the menu bar (far left) */
+/* Undo / Redo + toolbar-toggle buttons hosted in the menu bar (far left) */
 .menu-tools { display: flex; align-items: center; gap: 2px; padding-left: 2px; }
 .menu-tools .tbtn { height: 26px; min-width: 30px; }
 .menubar .tsep { align-self: center; }
+/* Toolbar show/hide toggle — chevron flips when collapsed */
+.tbtn-toggle .ico { transition: transform 160ms ease; }
+.tbtn-toggle.collapsed .ico { transform: rotate(180deg); }
+.app.toolbar-collapsed .toolbar { display: none; }
 
 .menu-dropdown {
   display: none;
@@ -604,56 +608,74 @@ a.about-row:hover { background: var(--np-accent-soft); }
 .link-pop {
   display: none;
   position: fixed;             /* fixed so the toolbar overflow can't clip it */
-  padding: 10px;
-  width: 280px;
+  padding: 14px;
+  width: 300px;
   background: #fff;
   border: 1px solid var(--np-border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(16,24,40,.16);
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(16, 24, 40, .18);
   z-index: 60;
+  animation: modal-in 140ms cubic-bezier(.2,.8,.25,1);
 }
 .link-pop.open { display: block; }
+.link-title {
+  margin-bottom: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--np-gutter-fg);
+}
 .link-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  height: 38px;
+  padding: 0 11px;
   border: 1px solid var(--np-border);
-  border-radius: 6px;
-  padding: 0 8px;
+  border-radius: 9px;
+  background: var(--np-bg);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.link-row:focus-within { border-color: var(--np-accent); box-shadow: 0 0 0 2px rgba(47,111,219,.15); }
-.link-ico { font-size: 13px; opacity: .7; }
+.link-row:focus-within { border-color: var(--np-accent); box-shadow: 0 0 0 3px rgba(47,111,219,.15); }
+.link-ico { display: inline-flex; flex: 0 0 auto; color: var(--np-gutter-fg); }
+.link-ico .ico { width: 15px; height: 15px; }
 .link-input {
   flex: 1 1 auto;
-  height: 30px;
+  min-width: 0;
+  height: 100%;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--np-fg);
   font-family: var(--np-ui-font);
-  font-size: 13px;
+  font-size: 13.5px;
 }
-.link-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.link-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
 .link-btn {
-  height: 30px;
-  padding: 0 14px;
+  height: 34px;
+  padding: 0 16px;
   border: 1px solid var(--np-border);
-  border-radius: 6px;
+  border-radius: 9px;
   background: #fff;
   color: var(--np-fg);
   font-family: var(--np-ui-font);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background 120ms ease, filter 120ms ease;
 }
 .link-btn:hover { background: var(--tb-hover); }
 .link-apply {
+  margin-left: auto;
   background: var(--np-accent);
   border-color: var(--np-accent);
   color: #fff;
   font-weight: 600;
+  box-shadow: 0 2px 8px rgba(47,111,219,.3);
 }
-.link-apply:hover { filter: brightness(1.05); background: var(--np-accent); }
-.link-remove { color: #c0392b; }
+.link-apply:hover { filter: brightness(1.06); background: var(--np-accent); }
+.link-remove { border-color: transparent; color: #dc2626; padding: 0 12px; }
 .link-remove:hover { background: #fdecea; }
 
 /* ============================================================
@@ -855,59 +877,70 @@ a.about-row:hover { background: var(--np-accent-soft); }
 /* Find bar — floats at the top-right of the editor area */
 .mc-find {
   position: absolute;
-  top: 8px;
+  top: 10px;
   right: 16px;
   z-index: 30;
   display: none;
   align-items: center;
-  gap: 4px;
-  padding: 5px 6px;
-  background: var(--tb-bg-top);
+  gap: 6px;
+  padding: 7px 8px;
+  background: #fff;
   border: 1px solid var(--np-border);
-  border-radius: 8px;
-  box-shadow: var(--tb-shadow);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(16, 24, 40, .16);
   font-family: var(--np-ui-font);
   font-size: 13px;
+  animation: modal-in 140ms cubic-bezier(.2,.8,.25,1);
 }
 .mc-find.open { display: flex; }
-.mc-find-ico { font-size: 12px; opacity: .7; padding-left: 2px; }
+.mc-find-ico { display: inline-flex; align-items: center; color: var(--np-gutter-fg); padding-left: 3px; }
+.mc-find-ico .ico { width: 15px; height: 15px; }
 .mc-find-input {
-  width: 180px;
-  height: 26px;
-  padding: 0 8px;
+  width: 190px;
+  height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--np-border);
-  border-radius: 5px;
+  border-radius: 8px;
   background: var(--np-bg);
   color: var(--np-fg);
   font: inherit;
   outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
-.mc-find-input:focus { border-color: var(--np-accent); }
+.mc-find-input:focus { border-color: var(--np-accent); box-shadow: 0 0 0 3px rgba(47,111,219,.15); }
 .mc-find-count {
-  min-width: 40px;
+  min-width: 42px;
   text-align: center;
   color: var(--np-gutter-fg);
-  font-family: var(--np-mono);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
+.mc-find-sep { width: 1px; align-self: stretch; margin: 2px 1px; background: var(--np-border); }
 .mc-find-btn {
-  height: 26px;
-  min-width: 26px;
-  padding: 0 6px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 8px;
   background: transparent;
   color: var(--tb-btn-fg);
   font: inherit;
   cursor: pointer;
+  transition: background 120ms ease;
 }
 .mc-find-btn:hover { background: var(--tb-hover); }
+.mc-find-btn .ico { width: 14px; height: 14px; }
 .mc-find-all {
-  border-color: var(--np-border);
+  border-color: var(--np-accent);
   color: var(--np-accent);
   font-weight: 600;
+  padding: 0 12px;
 }
-.mc-find-close { font-size: 12px; }
+.mc-find-all:hover { background: var(--np-accent-soft); }
+.mc-find-close .ico { width: 13px; height: 13px; }
 
 /* ============================================================
    RESPONSIVE / MOBILE
