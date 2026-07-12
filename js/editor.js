@@ -1453,8 +1453,22 @@
     refresh();
   }
 
+  // Help/dialog commands that must NOT pull focus back into the editor — doing so
+  // would re-trigger the software keyboard on touch devices.
+  var NO_FOCUS_CMDS = { about: 1, donate: 1, shortcuts: 1 };
+
   function exec(cmd) {
+    if (NO_FOCUS_CMDS[cmd]) {
+      switch (cmd) {
+        case 'about':     case 'donate': openAbout(); return;
+        case 'shortcuts': openShortcuts(); return;
+      }
+    }
     editor.focus();
+    // On touch devices we blur the editor when opening a menu (to hide the
+    // keyboard), which drops the live selection — restore it before formatting.
+    var live = window.getSelection();
+    if (savedRange && (!live.rangeCount || !editor.contains(live.anchorNode))) restoreSel();
     // With a multi-cell selection active, formatting applies to every selected cell
     if (hasCellSel() && CELL_CMDS[cmd]) { applyCmdToCells(cmd); return; }
     // With a discontiguous (Ctrl+drag) selection, formatting applies to every range
@@ -1524,7 +1538,12 @@
       var menu = title.parentNode;
       var wasOpen = menu.classList.contains('open');
       closeMenus(); closePopups();
-      if (!wasOpen) menu.classList.add('open');
+      if (!wasOpen) {
+        menu.classList.add('open');
+        // On touch devices the software keyboard would stay up (the editor keeps
+        // focus) and cover the dropdown — save the selection and blur to hide it.
+        if (mqTouch && mqTouch.matches) { saveSel(); editor.blur(); }
+      }
       return;
     }
     var item = ev.target.closest('.menu-item');
