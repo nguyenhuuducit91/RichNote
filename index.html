@@ -67,6 +67,7 @@
           <button class="menu-item" type="button" data-cmd="right"><span class="menu-check"></span><span class="menu-label">Align right</span><span class="menu-key">Ctrl+R</span></button>
           <button class="menu-item" type="button" data-cmd="justify"><span class="menu-check"></span><span class="menu-label">Justify</span><span class="menu-key">Ctrl+J</span></button>
           <div class="menu-sep"></div>
+          <button class="menu-item" type="button" data-cmd="formatPainter"><span class="menu-check"></span><span class="menu-label">Copy formatting</span><span class="menu-key">Ctrl+Shift+P</span></button>
           <button class="menu-item" type="button" data-cmd="clear"><span class="menu-check"></span><span class="menu-label">Clear formatting</span><span class="menu-key">Ctrl+\</span></button>
         </div>
       </div>
@@ -93,6 +94,8 @@
       <div class="menu" data-menu="help">
         <button class="menu-title" type="button">Help</button>
         <div class="menu-dropdown">
+          <button class="menu-item" type="button" data-cmd="shortcuts"><span class="menu-check"></span><span class="menu-label">Keyboard shortcuts</span><span class="menu-key">?</span></button>
+          <div class="menu-sep"></div>
           <button class="menu-item" type="button" data-cmd="donate"><span class="menu-check">♥</span><span class="menu-label">Support / Donate</span><span class="menu-key"></span></button>
           <button class="menu-item" type="button" data-cmd="about"><span class="menu-check"></span><span class="menu-label">About RichNote</span><span class="menu-key"></span></button>
         </div>
@@ -271,6 +274,9 @@
       <span class="tsep"></span>
 
       <div class="tgroup">
+        <button class="tbtn" id="fpBtn" type="button" title="Paint format — select source, click, then select target (double-click to keep on)">
+          <svg class="ico" viewBox="0 0 16 16"><path d="M13.6 2.4 7.9 8.1"/><path d="M8 8 4.1 10.8l2 3.5 5.2-2.4z"/><path d="M5.6 9.9 7.5 13.2M7.1 8.9 8.9 12.1M8.7 8.2 10.2 11"/></svg>
+        </button>
         <button class="tbtn" data-cmd="clear" title="Clear formatting (Ctrl+\)">
           <svg class="ico" viewBox="0 0 16 16"><path d="M3 4.8V3.2h9v1.6"/><path d="M8 3.2 5.4 12.8"/><path d="M3.4 12.8h4"/><path d="M9.8 9.8 12.8 12.8"/><path d="M12.8 9.8 9.8 12.8"/></svg>
         </button>
@@ -302,7 +308,7 @@
       <div class="about-hero">
         <div class="about-logo"><img src="img/icon.svg" alt="RichNote" /></div>
         <h2 class="about-title">Rich Note</h2>
-        <span class="about-ver" id="aboutVer">v1.1.12</span>
+        <span class="about-ver" id="aboutVer">v1.1.13</span>
         <p class="about-tagline">A beautiful WYSIWYG editor for Standard Notes</p>
       </div>
 
@@ -356,6 +362,58 @@
       </div>
 
       <div class="about-foot">MIT License · Made with ♥ in Vietnam</div>
+    </div>
+  </div>
+
+  <!-- Keyboard shortcuts dialog -->
+  <div class="modal-backdrop" id="scModal" aria-hidden="true">
+    <div class="modal sc-modal" role="dialog" aria-label="Keyboard shortcuts">
+      <button class="modal-close" id="scClose" type="button" aria-label="Close">&times;</button>
+      <div class="sc-head">
+        <span class="sc-head-ico"><svg class="ico" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 6.5h0M6 6.5h0M8 6.5h0M10 6.5h0M12 6.5h0M4 9h0M12 9h0M6 9.4h4" stroke-linecap="round"/></svg></span>
+        <h2 class="sc-title">Keyboard shortcuts</h2>
+      </div>
+      <div class="sc-body">
+        <div class="sc-cols">
+          <div class="sc-group">
+            <h3 class="sc-h3">Editing</h3>
+            <div class="sc-row"><span class="sc-act">Undo / Redo</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Y</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Cut / Copy / Paste</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>X</kbd> / <kbd>C</kbd> / <kbd>V</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Select all</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>A</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Find</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>F</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Repeat last format</span><span class="sc-keys"><kbd>F4</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">New line (block)</span><span class="sc-keys"><kbd>Shift</kbd><kbd>Enter</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Indent / Outdent</span><span class="sc-keys"><kbd>Tab</kbd> / <kbd>Shift</kbd><kbd>Tab</kbd></span></div>
+          </div>
+
+          <div class="sc-group">
+            <h3 class="sc-h3">Format</h3>
+            <div class="sc-row"><span class="sc-act">Bold / Italic / Underline</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Strikethrough</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>X</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Inline code</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Subscript / Superscript</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>=</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>=</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Heading 1–6</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>1</kbd>…<kbd>6</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Normal text</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>0</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Align left / center / right / justify</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>L</kbd> / <kbd>E</kbd> / <kbd>R</kbd> / <kbd>J</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Bulleted / Numbered list</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>8</kbd> / <kbd>7</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Insert link</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Clear formatting</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>\</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Font size + / −</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>.</kbd> / <kbd>,</kbd></span></div>
+          </div>
+
+          <div class="sc-group">
+            <h3 class="sc-h3">Multiple cursors &amp; selection</h3>
+            <div class="sc-row"><span class="sc-act">Add cursor above / below</span><span class="sc-keys"><kbd>Shift</kbd><kbd>Alt</kbd><kbd>↑</kbd> / <kbd>↓</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Add / remove a cursor</span><span class="sc-keys"><kbd>Alt</kbd>+Click</span></div>
+            <div class="sc-row"><span class="sc-act">Add a selection (discontiguous)</span><span class="sc-keys"><kbd>Ctrl</kbd>+Drag</span></div>
+            <div class="sc-row"><span class="sc-act">Add a cursor / toggle off</span><span class="sc-keys"><kbd>Ctrl</kbd>+Click</span></div>
+            <div class="sc-row"><span class="sc-act">Copy / cut all selections</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>C</kbd> / <kbd>X</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Select all matches (in Find)</span><span class="sc-keys"><kbd>Alt</kbd><kbd>Enter</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Collapse to one cursor</span><span class="sc-keys"><kbd>Esc</kbd></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sc-foot"><kbd>Ctrl</kbd> = <kbd>Cmd</kbd> on macOS</div>
     </div>
   </div>
 

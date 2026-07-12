@@ -50,6 +50,9 @@
   var linkRemove  = document.getElementById('linkRemove');
   var aboutModal  = document.getElementById('aboutModal');
   var aboutClose  = document.getElementById('aboutClose');
+  var scModal     = document.getElementById('scModal');
+  var scClose     = document.getElementById('scClose');
+  var fpBtn       = document.getElementById('fpBtn');
 
   /* Default color palette (Google Sheets style) */
   var PALETTE = [
@@ -101,6 +104,68 @@
       if (!run) { run = document.createElement('p'); editor.insertBefore(run, n); }
       run.appendChild(n);
     }
+  }
+  // After removing a list, execCommand leaves bare inline text separated by <br> at the
+  // editor's top level. Wrap each <br>-separated segment into its own <p> so every former
+  // list item becomes a real block line (not a stray inline/span).
+  function wrapInlineRunsAsBlocks() {
+    var n = editor.firstChild;
+    while (n) {
+      if (n.nodeType === 1 && BLOCK_RE.test(n.tagName)) { n = n.nextSibling; continue; }
+      if (n.nodeType === 3 && !/\S/.test(n.nodeValue)) { var w = n.nextSibling; editor.removeChild(n); n = w; continue; }
+      var stop = n;                                   // first block after this inline run
+      while (stop && !(stop.nodeType === 1 && BLOCK_RE.test(stop.tagName))) stop = stop.nextSibling;
+      var seg = [], ps = [], cur = n;
+      function pushP() {
+        var p = document.createElement('p');
+        if (seg.length) { for (var s = 0; s < seg.length; s++) p.appendChild(seg[s]); }
+        else p.appendChild(document.createElement('br'));
+        ps.push(p); seg = [];
+      }
+      while (cur !== stop) {
+        var next = cur.nextSibling;
+        editor.removeChild(cur);
+        if (cur.nodeType === 1 && cur.tagName === 'BR') pushP();
+        else seg.push(cur);
+        cur = next;
+      }
+      if (seg.length) pushP();                        // trailing segment (skip a lone trailing <br>)
+      for (var i = 0; i < ps.length; i++) editor.insertBefore(ps[i], stop);
+      n = stop;
+    }
+  }
+  function hasDirectList(el) {
+    for (var i = 0; i < el.children.length; i++) {
+      var t = el.children[i].tagName;
+      if (t === 'UL' || t === 'OL') return true;
+    }
+    return false;
+  }
+  // A UL/OL nested inside a top-level block (e.g. execCommand's <p><ul>…</ul></p>, or a
+  // heading wrapping a pasted list — <h1><ul>…</ul></h1>, which shows huge text and counts
+  // as ONE line) is invalid and breaks line numbering. Lift every such list out to the
+  // editor's top level, splitting the wrapper so its non-list content keeps its own tag
+  // (a heading stays a heading) and each <li> becomes its own line.
+  var LIFT_RE = /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|PRE)$/;
+  function liftLists() {
+    var kids = Array.prototype.slice.call(editor.children);
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (k.nodeType !== 1 || !LIFT_RE.test(k.tagName) || !hasDirectList(k)) continue;
+      var pieces = [], seg = null;
+      Array.prototype.slice.call(k.childNodes).forEach(function (c) {
+        if (c.nodeType === 1 && (c.tagName === 'UL' || c.tagName === 'OL')) { seg = null; pieces.push(c); }
+        else if (c.nodeType === 1 && c.tagName === 'BR') { seg = null; }        // break → new segment
+        else { if (!seg) { seg = k.cloneNode(false); seg.removeAttribute('class'); pieces.push(seg); } seg.appendChild(c); }
+      });
+      for (var p = 0; p < pieces.length; p++) {
+        var pc = pieces[p], isList = pc.tagName === 'UL' || pc.tagName === 'OL';
+        if (!isList && !/\S/.test(pc.textContent) && !pc.querySelector('img')) continue;  // drop empty clones
+        editor.insertBefore(pc, k);
+      }
+      editor.removeChild(k);
+    }
+    wrapInlineRunsAsBlocks();
   }
   function ensureContent() {
     if (editor.children.length === 0) editor.innerHTML = '<p><br></p>';
@@ -206,6 +271,7 @@
     document.execCommand('insertHTML', false, clean);
     stripSpuriousBg();
     normalizeBlocks();
+    liftLists();
     styleTables();
     ensureContent();
     onChange();
@@ -308,6 +374,36 @@
     if (!sel.rangeCount) return null;
     return blockOf(sel.anchorNode);
   }
+  // "Line" units for numbering/highlight: every top-level block, but a UL/OL expands so
+  // each <li> counts as its own line.
+  function lineUnits() {
+    var out = [], kids = editor.children;
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (el.tagName === 'UL' || el.tagName === 'OL') {
+        var lis = el.querySelectorAll('li');
+        for (var j = 0; j < lis.length; j++) out.push(lis[j]);
+      } else out.push(el);
+    }
+    return out;
+  }
+  function currentListItem() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return null;
+    return closestTag(sel.anchorNode, 'LI');
+  }
+  // The line unit holding the caret: the innermost <li>, else the top-level block.
+  function currentLineUnit() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return null;
+    var n = sel.anchorNode, li = null, block = null;
+    while (n && n !== editor) {
+      if (n.nodeType === 1 && n.tagName === 'LI' && !li) li = n;
+      if (n.parentNode === editor) block = n;
+      n = n.parentNode;
+    }
+    return li || block;
+  }
   function selectedBlocks() {
     var sel = window.getSelection();
     if (!sel.rangeCount) return [];
@@ -336,7 +432,7 @@
      Number by VISUAL line: merge blocks that share an offsetTop (inline nodes
      on the same line) and skip zero-height blocks so numbers never overlap. */
   function renderGutter(cur) {
-    var blocks = editor.children;
+    var blocks = lineUnits();
     var lines = [];
     var seen = {};
     for (var i = 0; i < blocks.length; i++) {
@@ -360,12 +456,17 @@
     // Compact gutter on mobile: narrower padding so line numbers take less width
     var gutterPad = (window.matchMedia && window.matchMedia('(max-width: 640px)').matches) ? 8 : 22;
     gutter.style.width = 'calc(' + String(lines.length).length + 'ch + ' + gutterPad + 'px)';
-    gutter.scrollTop = editor.scrollTop;
+    syncGutterScroll();
+  }
+  // Keep the numbers aligned with the content. Translating the inner layer tracks the
+  // editor's scroll exactly — scrollTop on the overflow:hidden gutter doesn't stick.
+  function syncGutterScroll() {
+    gutterInner.style.transform = 'translateY(' + (-editor.scrollTop) + 'px)';
   }
 
   /* ---------- Status bar ---------- */
   function updateStatus(cur) {
-    var blocks = editor.children;
+    var blocks = lineUnits();
     var seen = {}, count = 0, ln = 1;
     for (var i = 0; i < blocks.length; i++) {
       var b = blocks[i];
@@ -396,7 +497,7 @@
   editor.addEventListener('scroll', function () {
     if (gutterSyncRaf) return;
     gutterSyncRaf = true;
-    requestAnimationFrame(function () { gutterSyncRaf = false; gutter.scrollTop = editor.scrollTop; });
+    requestAnimationFrame(function () { gutterSyncRaf = false; syncGutterScroll(); });
   }, { passive: true });
 
   /* ---------- Toolbar button states ---------- */
@@ -538,16 +639,16 @@
 
   function refresh() {
     ensureContent();
-    var cur = currentBlock();
-    var blocks = editor.children;
-    for (var i = 0; i < blocks.length; i++) {
-      blocks[i].classList.toggle('current-line', blocks[i] === cur);
-    }
+    var cur = currentLineUnit();                    // the current line (an <li> or a top block)
+    var prev = editor.querySelectorAll('.current-line');
+    for (var i = 0; i < prev.length; i++) if (prev[i] !== cur) prev[i].classList.remove('current-line');
+    if (cur) cur.classList.add('current-line');
     renderGutter(cur);
     updateStatus(cur);
     updateToolbar();
-    updateTableTool(cur);
-    if (cellSel.length && !dragging && cur !== cellSelTable) clearCellSel();
+    var topCur = currentBlock();
+    updateTableTool(topCur);
+    if (cellSel.length && !dragging && topCur !== cellSelTable) clearCellSel();
   }
 
   function onChange() { refresh(); save(); }
@@ -660,6 +761,15 @@
     aboutModal.classList.remove('open');
     aboutModal.setAttribute('aria-hidden', 'true');
   }
+  function openShortcuts() {
+    closeMenus();
+    scModal.classList.add('open');
+    scModal.setAttribute('aria-hidden', 'false');
+  }
+  function closeShortcuts() {
+    scModal.classList.remove('open');
+    scModal.setAttribute('aria-hidden', 'true');
+  }
 
   // Font size in px: use the <font size=7> trick, then swap to inline style (on the current selection)
   function applyFontSize(px) {
@@ -700,6 +810,36 @@
     }
     onChange();
   }
+  // Outdent one level: reduce a block's --indent padding, OR — when the line is indented
+  // with literal whitespace — strip a leading tab / up to 4 spaces. Returns true if changed,
+  // so Shift+Tab works whether the indent is padding-based or space/tab-based.
+  function outdentBlock(block) {
+    if (!block) return false;
+    var lvl = parseInt(block.getAttribute('data-indent'), 10) || 0;
+    if (lvl > 0) { setIndent(block, lvl - 1); return true; }
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+    var tn = walker.nextNode();
+    if (!tn) return false;
+    var m = /^(\t| {1,4})/.exec(tn.nodeValue);
+    if (!m) return false;
+    var sel = window.getSelection();
+    var caretOff = (sel.rangeCount && sel.anchorNode === tn) ? sel.anchorOffset : -1;
+    tn.nodeValue = tn.nodeValue.slice(m[0].length);
+    if (caretOff >= 0) {
+      var r = document.createRange();
+      r.setStart(tn, Math.max(0, Math.min(caretOff - m[0].length, tn.nodeValue.length)));
+      r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    }
+    return true;
+  }
+  function outdentSelection() {
+    var blocks = selectedBlocks();
+    if (!blocks.length) { var c = currentBlock(); if (c) blocks = [c]; }
+    var changed = false;
+    for (var i = 0; i < blocks.length; i++) if (outdentBlock(blocks[i])) changed = true;
+    if (changed) onChange();
+  }
 
   function clearFormat() {
     document.execCommand('removeFormat');
@@ -708,6 +848,133 @@
     for (var i = 0; i < blocks.length; i++) setIndent(blocks[i], 0);
     document.execCommand('formatBlock', false, 'P');
     onChange();
+  }
+
+  /* ---------- Paragraph style (heading / normal / quote) ----------
+     execCommand('formatBlock') inside a list wraps the WHOLE list in the heading and
+     nests on every repeat (<h2><h1><h2><ul>…). So in a list we apply the block to each
+     <li>'s own content, replacing any existing heading instead of nesting. */
+  var LI_BLK_RE = /^(H1|H2|H3|H4|H5|H6|P|DIV|BLOCKQUOTE)$/;
+  function selectedListItems() {
+    var sel = window.getSelection(), cur = currentListItem();
+    if (!sel.rangeCount) return cur ? [cur] : [];
+    var range = sel.getRangeAt(0), out = [], all = editor.querySelectorAll('li');
+    for (var i = 0; i < all.length; i++) {
+      try { if (range.intersectsNode(all[i])) out.push(all[i]); } catch (e) {}
+    }
+    return out.length ? out : (cur ? [cur] : []);
+  }
+  function setListItemBlock(li, tag) {
+    var wrapper = null;
+    for (var i = 0; i < li.children.length; i++) {
+      if (LI_BLK_RE.test(li.children[i].tagName)) { wrapper = li.children[i]; break; }
+    }
+    if (tag === 'P') {                                  // Normal text → plain inline
+      if (wrapper) { while (wrapper.firstChild) li.insertBefore(wrapper.firstChild, wrapper); li.removeChild(wrapper); }
+      return;
+    }
+    var h = document.createElement(tag);
+    if (wrapper) {                                      // replace the existing heading (no nesting)
+      while (wrapper.firstChild) h.appendChild(wrapper.firstChild);
+      li.replaceChild(h, wrapper);
+    } else {                                            // wrap the li's own text (keep nested lists out)
+      var refList = null, kids = Array.prototype.slice.call(li.childNodes);
+      for (var k = 0; k < kids.length; k++) {
+        var nd = kids[k];
+        if (nd.nodeType === 1 && (nd.tagName === 'UL' || nd.tagName === 'OL')) { refList = nd; break; }
+        h.appendChild(nd);
+      }
+      li.insertBefore(h, refList);
+    }
+  }
+  function applyBlockFormat(tag) {
+    editor.focus();
+    if (!currentListItem()) { document.execCommand('formatBlock', false, tag); return; }
+    var lis = selectedListItems();
+    for (var i = 0; i < lis.length; i++) setListItemBlock(lis[i], tag);
+  }
+
+  /* ---------- Format painter (copy character formatting, Word-style) ---------- */
+  var fp = { fmt: null, active: false, sticky: false };
+  // Capture formatting at the caret/selection (Word-style: paragraph style + character
+  // style). Character props are compared against the SOURCE BLOCK — so a heading's own
+  // bold/size aren't captured as inline; only formatting applied ON TOP of the block is.
+  function captureFormat() {
+    var el = selEl();
+    if (!el) return null;
+    var block = currentBlock();
+    var cs = window.getComputedStyle(el);
+    var bcs = window.getComputedStyle(block || editor);
+    var td = cs.textDecorationLine || cs.textDecoration || '';
+    var btd = bcs.textDecorationLine || bcs.textDecoration || '';
+    var bg = effectiveBg(el);
+    var bt = block ? block.tagName : '';
+    var blockType = /^(H1|H2|H3|H4|H5|H6|BLOCKQUOTE|PRE)$/.test(bt) ? bt : (/^(P|DIV)$/.test(bt) ? 'P' : null);
+    return {
+      blockType: blockType,     // paragraph style copied too (H2 → H2), like Word
+      color: cs.color !== bcs.color ? cs.color : null,
+      background: (bg && bg !== 'transparent') ? bg : null,
+      bold:   parseInt(cs.fontWeight, 10) >= 600 && parseInt(bcs.fontWeight, 10) < 600,
+      italic: cs.fontStyle !== 'normal' && bcs.fontStyle === 'normal',
+      underline: td.indexOf('underline') >= 0 && btd.indexOf('underline') < 0,
+      strike:    td.indexOf('line-through') >= 0 && btd.indexOf('line-through') < 0,
+      code: inCode(),
+      fontFamily: primaryFont(cs.fontFamily) !== primaryFont(bcs.fontFamily) ? cs.fontFamily : null,
+      fontSize: Math.round(parseFloat(cs.fontSize)) !== Math.round(parseFloat(bcs.fontSize)) ? Math.round(parseFloat(cs.fontSize)) : null,
+      vAlign: (cs.verticalAlign === 'sub' || cs.verticalAlign === 'super') ? cs.verticalAlign : null
+    };
+  }
+  function applyCapturedFormat(fmt) {
+    if (!fmt) return;
+    editor.focus();
+    var sel = window.getSelection();
+    if (!sel.rangeCount || sel.getRangeAt(0).collapsed || !editor.contains(sel.anchorNode)) return;
+    if (fmt.blockType) document.execCommand('formatBlock', false, fmt.blockType);   // paragraph style
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand('removeFormat');                 // clean slate for character style
+    if (fmt.bold)      document.execCommand('bold');
+    if (fmt.italic)    document.execCommand('italic');
+    if (fmt.underline) document.execCommand('underline');
+    if (fmt.strike)    document.execCommand('strikeThrough');
+    if (fmt.color)      document.execCommand('foreColor', false, fmt.color);
+    if (fmt.background) document.execCommand('hiliteColor', false, fmt.background);
+    if (fmt.fontFamily) document.execCommand('fontName', false, fmt.fontFamily);
+    if (fmt.fontSize)   applyFontSize(fmt.fontSize);
+    if (fmt.code)       toggleCode();
+    if (fmt.vAlign) {
+      document.execCommand('styleWithCSS', false, false);
+      document.execCommand(fmt.vAlign === 'sub' ? 'subscript' : 'superscript');
+      document.execCommand('styleWithCSS', false, true);
+    }
+    onChange();
+  }
+  function fpArm(sticky) {
+    var fmt = captureFormat();
+    if (!fmt) return;
+    fp.fmt = fmt; fp.active = true; fp.sticky = !!sticky;
+    editor.classList.add('fp-armed');
+    if (fpBtn) fpBtn.classList.add('active');
+  }
+  function fpDisarm() {
+    fp.active = false; fp.sticky = false; fp.fmt = null;
+    editor.classList.remove('fp-armed');
+    if (fpBtn) fpBtn.classList.remove('active');
+  }
+  // Applying happens when the user finishes selecting the target text.
+  editor.addEventListener('mouseup', function () {
+    if (!fp.active) return;
+    setTimeout(function () {
+      var sel = window.getSelection();
+      if (sel.rangeCount && !sel.getRangeAt(0).collapsed && editor.contains(sel.anchorNode)) {
+        applyCapturedFormat(fp.fmt);
+        if (!fp.sticky) fpDisarm();
+      }
+    }, 0);
+  });
+  if (fpBtn) {
+    fpBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); saveSel(); });
+    fpBtn.addEventListener('click', function () { if (fp.active) fpDisarm(); else fpArm(false); });
+    fpBtn.addEventListener('dblclick', function () { fpArm(true); });
   }
 
   function toggleWrap() {
@@ -1210,16 +1477,16 @@
       case 'sub':       document.execCommand('styleWithCSS', false, false); document.execCommand('subscript');   document.execCommand('styleWithCSS', false, true); break;
       case 'super':     document.execCommand('styleWithCSS', false, false); document.execCommand('superscript'); document.execCommand('styleWithCSS', false, true); break;
       case 'code':      toggleCode(); break;
-      case 'h1':        document.execCommand('formatBlock', false, 'H1'); break;
-      case 'h2':        document.execCommand('formatBlock', false, 'H2'); break;
-      case 'h3':        document.execCommand('formatBlock', false, 'H3'); break;
-      case 'h4':        document.execCommand('formatBlock', false, 'H4'); break;
-      case 'h5':        document.execCommand('formatBlock', false, 'H5'); break;
-      case 'h6':        document.execCommand('formatBlock', false, 'H6'); break;
-      case 'p':         document.execCommand('formatBlock', false, 'P'); break;
-      case 'quote':     document.execCommand('formatBlock', false, 'BLOCKQUOTE'); break;
-      case 'ul':        document.execCommand('insertUnorderedList'); break;
-      case 'ol':        document.execCommand('insertOrderedList'); break;
+      case 'h1':        applyBlockFormat('H1'); break;
+      case 'h2':        applyBlockFormat('H2'); break;
+      case 'h3':        applyBlockFormat('H3'); break;
+      case 'h4':        applyBlockFormat('H4'); break;
+      case 'h5':        applyBlockFormat('H5'); break;
+      case 'h6':        applyBlockFormat('H6'); break;
+      case 'p':         applyBlockFormat('P'); break;
+      case 'quote':     applyBlockFormat('BLOCKQUOTE'); break;
+      case 'ul':        document.execCommand('insertUnorderedList'); liftLists(); break;
+      case 'ol':        document.execCommand('insertOrderedList');   liftLists(); break;
       case 'left':      document.execCommand('justifyLeft'); break;
       case 'center':    document.execCommand('justifyCenter'); break;
       case 'right':     document.execCommand('justifyRight'); break;
@@ -1228,7 +1495,9 @@
       case 'outdent':   indentBlocks(-1); return;
       case 'link':      openLinkPop(); return;
       case 'about':     case 'donate': openAbout(); return;
+      case 'shortcuts': openShortcuts(); return;
       case 'clear':     clearFormat(); return;
+      case 'formatPainter': fpArm(false); return;
       case 'wrap':      toggleWrap(); return;
       case 'minimap':   if (window.__richnoteMinimap) window.__richnoteMinimap.toggle(); return;
       case 'find':        if (window.__richnoteFind) window.__richnoteFind.open(); return;
@@ -1362,8 +1631,8 @@
   styleSelect.addEventListener('change', function () {
     restoreSel();
     var v = this.value;
-    document.execCommand('formatBlock', false, v);
-    lastAction = function () { editor.focus(); document.execCommand('formatBlock', false, v); onChange(); };
+    applyBlockFormat(v);
+    lastAction = function () { applyBlockFormat(v); onChange(); };
     onChange();
   });
   fontSelect.addEventListener('change', function () {
@@ -1537,12 +1806,14 @@
       right: s('<path d="M2 4h12M6 8h8M2 12h12"/>'),
       justify: s('<path d="M2 4h12M2 8h12M2 12h12"/>'),
       clear: s('<path d="M3 4.8V3.2h9v1.6"/><path d="M8 3.2 5.4 12.8"/><path d="M3.4 12.8h4"/><path d="M9.8 9.8 12.8 12.8"/><path d="M12.8 9.8 9.8 12.8"/>'),
+      formatPainter: s('<path d="M13.6 2.4 7.9 8.1"/><path d="M8 8 4.1 10.8l2 3.5 5.2-2.4z"/><path d="M5.6 9.9 7.5 13.2M7.1 8.9 8.9 12.1M8.7 8.2 10.2 11"/>'),
       link: s('<path d="M6.7 9.3 9.3 6.7"/><path d="M8.4 4.6l1-1a2.7 2.7 0 0 1 3.9 3.9l-1 1"/><path d="M7.6 11.4l-1 1a2.7 2.7 0 0 1-3.9-3.9l1-1"/>'),
       ul: s('<circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/>'),
       ol: s('<path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text>'),
       table: s('<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.7h12M6.4 3v10M10 3v10"/>'),
       wrap: s('<path d="M2 4h12M2 8h8.4a2.4 2.4 0 0 1 0 4.8H7.4"/><path d="M9.2 10.8 7.4 12.8l1.8 2"/>'),
       minimap: s('<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M10.2 3.5v9" opacity=".55"/><path d="M4.6 5.6h3.4M4.6 8h4.2M4.6 10.4h2.6" stroke-width="1"/>'),
+      shortcuts: s('<rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 6.5h0M6 6.5h0M8 6.5h0M10 6.5h0M12 6.5h0M4 9h0M12 9h0M6 9.4h4" stroke-linecap="round"/>'),
       donate: s('<path class="fill" d="M8 13.4C8 13.4 2.6 10 2.6 6.3A2.6 2.6 0 0 1 8 5.1a2.6 2.6 0 0 1 5.4 1.2C13.4 10 8 13.4 8 13.4z"/>'),
       about: s('<circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.4"/><circle class="dot" cx="8" cy="5.2" r=".75"/>')
     };
@@ -1558,11 +1829,16 @@
     }
   })();
 
-  /* ---------- About dialog events ---------- */
+  /* ---------- About / Shortcuts dialog events ---------- */
   aboutClose.addEventListener('click', closeAbout);
   aboutModal.addEventListener('click', function (ev) { if (ev.target === aboutModal) closeAbout(); });
+  if (scClose) scClose.addEventListener('click', closeShortcuts);
+  if (scModal) scModal.addEventListener('click', function (ev) { if (ev.target === scModal) closeShortcuts(); });
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape' && aboutModal.classList.contains('open')) closeAbout();
+    if (ev.key !== 'Escape') return;
+    if (aboutModal.classList.contains('open')) closeAbout();
+    if (scModal && scModal.classList.contains('open')) closeShortcuts();
+    if (fp.active) fpDisarm();
   });
 
   /* ---------- Link popup events ---------- */
@@ -1645,8 +1921,22 @@
       ev.preventDefault();
       var tabCell = currentCell();
       if (tabCell) { moveCell(tabCell, ev.shiftKey ? -1 : 1); return; }
+      // In a list: Tab nests the item, Shift+Tab un-nests; Shift+Tab on a top-level item
+      // drops it out of the list into a normal paragraph (like Word).
+      if (currentListItem()) {
+        // Drop the current-line class first, else execCommand bakes its CSS background
+        // into an inline span on the moved item.
+        var clNow = editor.querySelector('.current-line');
+        if (clNow) clNow.classList.remove('current-line');
+        document.execCommand(ev.shiftKey ? 'outdent' : 'indent');
+        liftLists();
+        ensureContent();
+        onChange();
+        return;
+      }
       var blocks = selectedBlocks();
-      if (ev.shiftKey || blocks.length > 1) indentBlocks(ev.shiftKey ? -1 : 1);
+      if (ev.shiftKey) outdentSelection();               // outdent: padding OR leading spaces/tab
+      else if (blocks.length > 1) indentBlocks(1);
       else document.execCommand('insertText', false, '\t');
       return;
     }
@@ -1678,6 +1968,7 @@
       }
       else if (c === 'Digit7') exec('ol');
       else if (c === 'Digit8') exec('ul');
+      else if (c === 'KeyP') exec('formatPainter');   // Ctrl+Shift+P  copy formatting
       else if (c === 'Period') changeFontSize(1);     // Ctrl+Shift+.  increase font size
       else if (c === 'Comma') changeFontSize(-1);     // Ctrl+Shift+,  decrease font size
       else if (c === 'KeyZ') { document.execCommand('redo'); onChange(); }
@@ -1705,6 +1996,7 @@
   function loadContent(html, title) {
     editor.innerHTML = html || '<p><br></p>';
     normalizeBlocks();
+    liftLists();
     styleTables();
     // Convert legacy indentation (margin-left) to the new padding-based --indent
     // so the current-line highlight reaches the left edge.
@@ -1749,17 +2041,15 @@
   }
 
   /* ---------- Startup ---------- */
-  // Word Wrap: honor a saved preference; otherwise follow the device/size — ON for
-  // touch devices (phones/tablets) and narrow windows, OFF on desktop — and keep
-  // following it as the window resizes until the user toggles it themselves.
+  // Word Wrap: default from the device/size — ON for touch devices (phones/tablets) and
+  // narrow windows, OFF on desktop — then honor a saved preference if one exists. The
+  // default is computed BEFORE touching localStorage, because on iOS (Standard Notes runs
+  // editors in a cross-origin iframe) localStorage access throws a SecurityError; if that
+  // read were the only place we set wrapOn, wrap would silently stay off on iPhone/iPad.
+  wrapOn = autoWrap();
   try {
     var savedWrap = localStorage.getItem('richnote-wrap');
-    if (savedWrap === null) {
-      wrapOn = autoWrap();
-    } else {
-      wrapUserSet = true;
-      wrapOn = savedWrap === '1';
-    }
+    if (savedWrap !== null) { wrapUserSet = true; wrapOn = savedWrap === '1'; }
   } catch (e) {}
   editor.classList.toggle('wrap', wrapOn);
   // Auto-follow device / window-size changes until the user sets Word Wrap explicitly
