@@ -1143,6 +1143,33 @@
     return cc ? [cc] : null;
   }
 
+  /* ---------- Apply formatting across a discontiguous (Ctrl+drag) selection ---------- */
+  function mcActive() { return !!(window.__richnoteMC && window.__richnoteMC.active()); }
+  var MC_FMT = { bold: 1, italic: 1, underline: 1, strike: 1, sub: 1, super: 1, code: 1,
+    left: 1, center: 1, right: 1, justify: 1, clear: 1 };
+  // The raw command run once per selected range (the multi-cursor driver sets the native
+  // selection to each range before calling this).
+  function rawFormat(cmd) {
+    switch (cmd) {
+      case 'bold':      document.execCommand('bold'); break;
+      case 'italic':    document.execCommand('italic'); break;
+      case 'underline': document.execCommand('underline'); break;
+      case 'strike':    document.execCommand('strikeThrough'); break;
+      case 'sub':       document.execCommand('styleWithCSS', false, false); document.execCommand('subscript');   document.execCommand('styleWithCSS', false, true); break;
+      case 'super':     document.execCommand('styleWithCSS', false, false); document.execCommand('superscript'); document.execCommand('styleWithCSS', false, true); break;
+      case 'code':      toggleCode(); break;
+      case 'left':      document.execCommand('justifyLeft'); break;
+      case 'center':    document.execCommand('justifyCenter'); break;
+      case 'right':     document.execCommand('justifyRight'); break;
+      case 'justify':   document.execCommand('justifyFull'); break;
+      case 'clear':     document.execCommand('removeFormat'); break;
+    }
+  }
+  function rawColor(kind, color) {
+    document.execCommand('styleWithCSS', false, true);
+    document.execCommand(kind === 'fore' ? 'foreColor' : 'hiliteColor', false, color);
+  }
+
   /* ---------- Show / hide the formatting toolbar (default: shown) ---------- */
   var toolbarOn = true;
   try { toolbarOn = localStorage.getItem('richnote-toolbar') !== '0'; } catch (e) {}
@@ -1163,6 +1190,8 @@
     editor.focus();
     // With a multi-cell selection active, formatting applies to every selected cell
     if (hasCellSel() && CELL_CMDS[cmd]) { applyCmdToCells(cmd); return; }
+    // With a discontiguous (Ctrl+drag) selection, formatting applies to every range
+    if (MC_FMT[cmd] && mcActive()) { window.__richnoteMC.run(function () { rawFormat(cmd); }); return; }
     if (REPEATABLE[cmd]) lastAction = (function (c) { return function () { exec(c); }; })(cmd);
     switch (cmd) {
       case 'undo':      document.execCommand('undo'); break;
@@ -1417,6 +1446,8 @@
     onChange();
   }
   function applyColor(kind, color) {
+    // Discontiguous (Ctrl+drag) selection → colour every range
+    if (mcActive()) { window.__richnoteMC.run(function () { rawColor(kind, color); }); closePopups(); return; }
     // Highlight colour inside a table = fill the whole cell (Word-style shading), unless
     // the user has an explicit text selection to highlight. Text colour still colours text.
     if (kind === 'back') {
@@ -1660,11 +1691,11 @@
       else if (c === 'KeyK') exec('link');
       else if (c === 'Backslash') exec('clear');
       else if (c === 'KeyY') { document.execCommand('redo'); onChange(); }
-      // With a multi-cell selection, route Ctrl+B/I/U through exec so the format applies
-      // to every selected cell (otherwise the browser would only affect the caret's cell).
-      else if (c === 'KeyB' && hasCellSel()) exec('bold');
-      else if (c === 'KeyI' && hasCellSel()) exec('italic');
-      else if (c === 'KeyU' && hasCellSel()) exec('underline');
+      // With a multi-cell or discontiguous (Ctrl+drag) selection, route Ctrl+B/I/U through
+      // exec so the format hits every cell/range (else the browser only affects the caret).
+      else if (c === 'KeyB' && (hasCellSel() || mcActive())) exec('bold');
+      else if (c === 'KeyI' && (hasCellSel() || mcActive())) exec('italic');
+      else if (c === 'KeyU' && (hasCellSel() || mcActive())) exec('underline');
       else handled = false;   // b/i/u/z/a/c/x/v: let the browser handle them
     }
     if (handled) ev.preventDefault();

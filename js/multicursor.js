@@ -65,12 +65,10 @@
     return rect && rect.height ? rect : null;
   }
 
-  function render() {
-    if (!mcMode || !carets.length) { clearOverlay(); return; }
-    // Drop stale carets if the document was replaced underneath us (external reload)
-    for (var d = 0; d < carets.length; d++) {
-      if (!editor.contains(carets[d].startContainer)) { leaveMode(false); return; }
-    }
+  // Paint an arbitrary list of ranges onto the overlay (used by render() and by the live
+  // Ctrl+drag preview, which must show the existing selections while a new one is dragged).
+  function paintRanges(ranges) {
+    if (!ranges.length) { clearOverlay(); return; }
     var host = editor.getBoundingClientRect();
     overlay.style.display = 'block';
     overlay.style.left = host.left + 'px';
@@ -78,8 +76,8 @@
     overlay.style.width = host.width + 'px';
     overlay.style.height = host.height + 'px';
     var html = [];
-    for (var i = 0; i < carets.length; i++) {
-      var range = carets[i];
+    for (var i = 0; i < ranges.length; i++) {
+      var range = ranges[i];
       if (!range.collapsed) {
         var rects = range.getClientRects();
         for (var k = 0; k < rects.length; k++) {
@@ -96,6 +94,14 @@
       }
     }
     overlay.innerHTML = html.join('');
+  }
+  function render() {
+    if (!mcMode || !carets.length) { clearOverlay(); return; }
+    // Drop stale carets if the document was replaced underneath us (external reload)
+    for (var d = 0; d < carets.length; d++) {
+      if (!editor.contains(carets[d].startContainer)) { leaveMode(false); return; }
+    }
+    paintRanges(carets);
   }
 
   /* ---------- Caret bookkeeping ---------- */
@@ -221,6 +227,31 @@
   }
   function splitLines() {
     commitEdit(function () { document.execCommand('insertParagraph', false, null); });
+  }
+  // Copy every selection's text (document order, newline-joined) to the clipboard; cut also
+  // deletes them. A hidden textarea + execCommand('copy') works inside the Standard Notes
+  // iframe where the async Clipboard API is blocked; navigator.clipboard is the fallback.
+  function copyRanges(cut) {
+    if (!carets.length) return;
+    sortCarets();
+    var parts = [];
+    for (var i = 0; i < carets.length; i++) parts.push(carets[i].toString());
+    var text = parts.join('\n');
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    if (!ok && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(function () {});
+    }
+    editor.focus();
+    if (cut) { delBackward(); }              // remove every selected range
+    else { syncNativeToPrimary(); render(); }
   }
 
   /* ---------- Movement across every caret ---------- */
@@ -419,6 +450,13 @@
     openReplace: function () { openFind(); if (findBar) findBar.classList.add('mc-find-expanded'); }
   };
 
+  // Exposed so the toolbar / shortcuts can apply a formatting command to EVERY range of
+  // a discontiguous (Ctrl+drag / multi-cursor) selection, not just the primary one.
+  window.__richnoteMC = {
+    active: function () { return mcMode; },
+    run: function (fn) { if (mcMode) commitEdit(fn); }
+  };
+
   // Flatten editor text nodes so we can map a global string index back to (node, offset)
   function textIndex() {
     var walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null);
@@ -600,7 +638,15 @@
     if (ev.key === 'Enter')     { ev.preventDefault(); ev.stopImmediatePropagation(); splitLines(); return; }
     if (ev.key === 'Tab')       { ev.preventDefault(); ev.stopImmediatePropagation(); typeText('\t'); return; }
 
-    // Ctrl+A / Ctrl+C / Ctrl+X / Ctrl+V / Ctrl+Z with many carets → drop to normal editing
+    // Ctrl+C / Ctrl+X — copy (and cut) every selected range, joined by newlines (Sublime-style)
+    if (mod && !ev.shiftKey && !ev.altKey && (ev.key === 'c' || ev.key === 'C')) {
+      ev.preventDefault(); ev.stopImmediatePropagation(); copyRanges(false); return;
+    }
+    if (mod && !ev.shiftKey && !ev.altKey && (ev.key === 'x' || ev.key === 'X')) {
+      ev.preventDefault(); ev.stopImmediatePropagation(); copyRanges(true); return;
+    }
+
+    // Ctrl+A / Ctrl+V / Ctrl+Z with many carets → drop to normal editing
     if (mod) { leaveMode(false); return; }   // let the browser handle it once
 
     // Printable character
@@ -611,7 +657,41 @@
     }
   }, true);
 
-  // Alt+Click adds/removes a caret; a plain click collapses multi-cursor
+  /* ---------- Sublime-style mouse multi-selection ----------
+     • Ctrl/Cmd + drag  → add another highlighted range (existing ones stay painted — no flicker)
+     • Ctrl/Cmd + click → add a caret; clicking on an existing caret/selection removes it (toggle)
+     • Ctrl/Cmd + click on a link is left to editor.js (open link)
+     We drive the new range ourselves (caretRangeFromPoint) instead of the browser's native
+     selection, so the other selections never disappear mid-drag. */
+  var ctrlDrag = null;
+
+  // Finish a Ctrl selection edit: 2+ ranges → multi-cursor; exactly 1 → a normal selection.
+  function finalizeCarets() {
+    goalX = null;
+    dedupe();
+    if (carets.length >= 2) {
+      mcMode = true;
+      editor.classList.add('mc-active');
+      editor.focus();
+      syncNativeToPrimary();
+      render();
+    } else {
+      var one = carets.length ? carets[0].cloneRange() : null;
+      carets = [];
+      mcMode = false;
+      editor.classList.remove('mc-active');
+      clearOverlay();
+      editor.focus();
+      if (one) applyCaretToSelection(one);
+    }
+  }
+  function rangeHitsPoint(range, node, offset) {
+    try {
+      if (range.collapsed) return range.startContainer === node && range.startOffset === offset;
+      return range.comparePoint(node, offset) === 0;
+    } catch (e) { return false; }
+  }
+
   document.addEventListener('mousedown', function (ev) {
     if (!editor.contains(ev.target)) return;
     if (ev.altKey && ev.button === 0) {
@@ -619,8 +699,58 @@
       addCaretAtPoint(ev.clientX, ev.clientY);
       return;
     }
+    if ((ev.ctrlKey || ev.metaKey) && ev.button === 0) {
+      if (ev.target.closest && ev.target.closest('a')) return;          // Ctrl+click a link → open it
+      if (ev.target.closest && ev.target.closest('td,th')) return;      // tables own their own drags
+      var anchor = caretRangeFromPoint(ev.clientX, ev.clientY);
+      if (!anchor) return;
+      ev.preventDefault();
+      // Preserve the current selection/caret (collapsed or not) as the base set.
+      var base = mcMode ? carets.slice()
+        : (sel.rangeCount && editor.contains(sel.anchorNode) ? [sel.getRangeAt(0).cloneRange()] : []);
+      ctrlDrag = { base: base, anchor: anchor.cloneRange(), pending: anchor.cloneRange(), moved: false };
+      sel.removeAllRanges();                                            // overlay owns the visuals now
+      editor.focus();
+      paintRanges(base.concat([ctrlDrag.pending]));                     // show base + the new caret at once
+      window.addEventListener('mousemove', onCtrlDragMove, true);
+      window.addEventListener('mouseup', onCtrlDragUp, true);
+      return;
+    }
     if (mcMode) leaveMode(false);   // plain click → let the browser place a single caret
   }, true);
+
+  function onCtrlDragMove(ev) {
+    if (!ctrlDrag) return;
+    var pt = caretRangeFromPoint(ev.clientX, ev.clientY);
+    if (!pt) return;
+    ctrlDrag.moved = true;
+    var a = ctrlDrag.anchor, rng = document.createRange();
+    if (a.compareBoundaryPoints(Range.START_TO_START, pt) <= 0) {
+      rng.setStart(a.startContainer, a.startOffset); rng.setEnd(pt.startContainer, pt.startOffset); rng._backward = false;
+    } else {
+      rng.setStart(pt.startContainer, pt.startOffset); rng.setEnd(a.startContainer, a.startOffset); rng._backward = true;
+    }
+    ctrlDrag.pending = rng;
+    paintRanges(ctrlDrag.base.concat([rng]));
+  }
+  function onCtrlDragUp() {
+    window.removeEventListener('mousemove', onCtrlDragMove, true);
+    window.removeEventListener('mouseup', onCtrlDragUp, true);
+    var cd = ctrlDrag; ctrlDrag = null;
+    if (!cd) return;
+    var base = cd.base, pending = cd.pending;
+    // A click (no drag) on an existing caret/selection toggles it off.
+    if (pending.collapsed && !cd.moved) {
+      for (var i = 0; i < base.length; i++) {
+        if (rangeHitsPoint(base[i], pending.startContainer, pending.startOffset)) {
+          base.splice(i, 1); carets = base; finalizeCarets(); return;
+        }
+      }
+    }
+    base.push(pending);
+    carets = base;
+    finalizeCarets();
+  }
 
   // Keep the overlay glued to the carets as the view changes
   editor.addEventListener('scroll', render);
