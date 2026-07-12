@@ -40,16 +40,28 @@ A fast, beautiful **WYSIWYG editor** for [Standard Notes](https://standardnotes.
 
 ## 🚀 Install in 30 seconds
 
-Standard Notes loads editors from a URL, so the fastest way is to use the hosted version.
+Standard Notes loads editors from a URL. Just import one of the manifests below.
 
 1. Open **Standard Notes** → **Preferences / Settings → Plugins (or Extensions) → Import Extension**.
-2. Paste this link and confirm:
+2. Paste **one** of these links and confirm:
+
+   **🌐 Online (recommended) — runs straight from GitHub Pages, no download, always the latest:**
+
+   ```
+   https://nguyenhuuducit91.github.io/RichNote/ext.online.json
+   ```
+
+   **📦 Packaged — installs a bundled copy from `RichNote.zip` (works offline):**
 
    ```
    https://nguyenhuuducit91.github.io/RichNote/ext.json
    ```
 
 3. Open any note → click the **editor switcher** → choose **RichNote**. Done! 🎉
+
+> The **online** manifest carries no `download_url`, so Standard Notes loads the editor
+> directly from the hosted `index.html` — nothing to package or update locally. The
+> **packaged** manifest additionally points to `RichNote.zip` for an offline/local install.
 
 > Custom editors may require a Standard Notes plan that supports extensions, or the self‑hosted / desktop app.
 
@@ -112,7 +124,8 @@ Found a bug or have an idea? [Open an issue](https://github.com/nguyenhuuducit91
 
 ```
 RichNote/
-├── ext.json                  # Standard Notes component manifest (production)
+├── ext.json                  # Component manifest — packaged (bundles RichNote.zip)
+├── ext.online.json           # Component manifest — online only (hosted, no zip)
 ├── ext.dev.json              # DEV manifest — loads from http://localhost:8080
 ├── index.html                # Editor page (menu, toolbar, WYSIWYG area)
 ├── styles/editor.css         # All styling (light theme, toolbar, dialogs)

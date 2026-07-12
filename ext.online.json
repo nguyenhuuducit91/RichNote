@@ -1,0 +1,24 @@
+{
+  "identifier": "com.vietis.richnote",
+  "name": "Rich Note",
+  "content_type": "SN|Component",
+  "area": "editor-editor",
+  "note_type": "rich-text",
+  "file_type": "html",
+  "version": "1.1.11",
+  "description": "A beautiful, fast WYSIWYG rich-text editor for Standard Notes — live formatting, a Word-like toolbar, headings H1–H6, text & highlight colors, tables (resize, cell selection & fill), line numbers, current-line highlight, Sublime-style multiple cursors, Find & Replace (Ctrl+F), a minimap, keyboard shortcuts and Word Wrap. Light theme. Hosted build — loads directly from GitHub Pages, no download/zip required.",
+  "url": "https://nguyenhuuducit91.github.io/RichNote/index.html",
+  "latest_url": "https://nguyenhuuducit91.github.io/RichNote/ext.online.json",
+  "download_url": "https://nguyenhuuducit91.github.io/RichNote/index.html",
+  "marketing_url": "https://github.com/nguyenhuuducit91/RichNote",
+  "thumbnail_url": "https://nguyenhuuducit91.github.io/RichNote/img/icon.png",
+  "dock_icon": {
+    "type": "svg",
+    "source": "https://nguyenhuuducit91.github.io/RichNote/img/icon.svg",
+    "background_color": "#2f6fdb",
+    "foreground_color": "#ffffff",
+    "border_color": "#2f6fdb"
+  },
+  "author": "Nguyen Huu Duc",
+  "flags": ["catalog"]
+}

@@ -1,6 +1,6 @@
 // Single source of truth for the version = package.json "version".
-// Stamps it into ext.json, ext.dev.json and the About badge in index.html so they
-// can never drift apart again. Runs automatically as part of `npm run build`.
+// Stamps it into ext.json, ext.dev.json, ext.online.json and the About badge in
+// index.html so they can never drift apart. Runs automatically as part of `npm run build`.
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const v = JSON.parse(readFileSync('package.json', 'utf8')).version;
@@ -17,9 +17,10 @@ function bumpJson(file) {
 }
 bumpJson('ext.json');
 bumpJson('ext.dev.json');
+bumpJson('ext.online.json');
 
 const html = readFileSync('index.html', 'utf8');
 const outHtml = html.replace(/(id="aboutVer">)v\d+\.\d+\.\d+(<)/, `$1v${v}$2`);
 if (outHtml !== html) writeFileSync('index.html', outHtml);
 
-console.log('Stamped version', v, '→ ext.json, ext.dev.json, index.html badge');
+console.log('Stamped version', v, '→ ext.json, ext.dev.json, ext.online.json, index.html badge');
