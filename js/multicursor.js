@@ -623,14 +623,18 @@
       return;
     }
 
-    // Arrows / Home / End — move (or, with Shift, extend) every caret
+    // Arrows / Home / End — move (or, with Shift, extend) every caret. Honour the same
+    // modifiers native single-caret editing does: Ctrl/Alt+Left/Right jumps by word, and
+    // Ctrl+Home/End jumps to the document boundary (else per line).
     var alter = ev.shiftKey ? 'extend' : 'move';
-    if (ev.key === 'ArrowLeft')  { ev.preventDefault(); ev.stopImmediatePropagation(); goalX = null; moveAll(alter, 'left', 'character'); return; }
-    if (ev.key === 'ArrowRight') { ev.preventDefault(); ev.stopImmediatePropagation(); goalX = null; moveAll(alter, 'right', 'character'); return; }
+    var hGran = (ev.ctrlKey || ev.altKey) ? 'word' : 'character';
+    var vBound = (ev.ctrlKey || ev.metaKey) ? 'documentboundary' : 'lineboundary';
+    if (ev.key === 'ArrowLeft')  { ev.preventDefault(); ev.stopImmediatePropagation(); goalX = null; moveAll(alter, 'left', hGran); return; }
+    if (ev.key === 'ArrowRight') { ev.preventDefault(); ev.stopImmediatePropagation(); goalX = null; moveAll(alter, 'right', hGran); return; }
     if (ev.key === 'ArrowUp')    { ev.preventDefault(); ev.stopImmediatePropagation(); moveAll(alter, 'backward', 'line'); return; }
     if (ev.key === 'ArrowDown')  { ev.preventDefault(); ev.stopImmediatePropagation(); moveAll(alter, 'forward', 'line'); return; }
-    if (ev.key === 'Home')       { ev.preventDefault(); ev.stopImmediatePropagation(); goalX = null; moveAll(alter, 'backward', 'lineboundary'); return; }
-    if (ev.key === 'End')        { ev.preventDefault(); ev.stopImmediatePropagation(); goalX = null; moveAll(alter, 'forward', 'lineboundary'); return; }
+    if (ev.key === 'Home')       { ev.preventDefault(); ev.stopImmediatePropagation(); goalX = null; moveAll(alter, 'backward', vBound); return; }
+    if (ev.key === 'End')        { ev.preventDefault(); ev.stopImmediatePropagation(); goalX = null; moveAll(alter, 'forward', vBound); return; }
 
     // Editing
     if (ev.key === 'Backspace') { ev.preventDefault(); ev.stopImmediatePropagation(); delBackward(); return; }
@@ -646,8 +650,20 @@
       ev.preventDefault(); ev.stopImmediatePropagation(); copyRanges(true); return;
     }
 
-    // Ctrl+A / Ctrl+V / Ctrl+Z with many carets → drop to normal editing
-    if (mod) { leaveMode(false); return; }   // let the browser handle it once
+    // A modifier key pressed on its own (Ctrl / Alt / Shift / Meta) fires a keydown whose
+    // own modifier flag is already set — ignore it. Otherwise merely holding Ctrl to reach a
+    // shortcut like Ctrl+B would collapse every caret before the letter key even arrives.
+    if (ev.key === 'Control' || ev.key === 'Shift' || ev.key === 'Alt' || ev.key === 'Meta') return;
+
+    // Ctrl/Cmd + A / V / Z / Y — select-all, paste, undo and redo don't map onto multiple
+    // carets: drop to normal editing and let the browser handle it once.
+    if (mod && (ev.code === 'KeyA' || ev.code === 'KeyV' || ev.code === 'KeyZ' || ev.code === 'KeyY')) {
+      leaveMode(false); return;
+    }
+
+    // Any other Ctrl/Cmd combo (Ctrl+B/I/U, alignment, headings, sub/super, clear, …) stays in
+    // multi-cursor: fall through so editor.js applies it to EVERY caret via its mcActive() routing.
+    if (mod) return;
 
     // Printable character
     if (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {

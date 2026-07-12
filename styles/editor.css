@@ -32,10 +32,10 @@
 
   --np-status-bg: var(--sn-stylekit-contrast-background-color, #eef0f3);
 
-  --np-doc-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --np-doc-font: "Courier New", "DejaVu Sans Mono", "Consolas", monospace;
   --np-mono: "Consolas", "JetBrains Mono", "DejaVu Sans Mono", "Courier New", monospace;
   --np-ui-font: -apple-system, "Segoe UI", Roboto, sans-serif;
-  --np-fs: 12px;              /* default font size */
+  --np-fs: 13px;              /* default font size */
   --np-lh: 20px;
   --np-pad-y: 6px;
   --np-pad-x: 12px;
@@ -891,7 +891,7 @@ a.about-row:hover { background: var(--np-accent-soft); }
   padding: var(--np-pad-y) 0 40px;   /* horizontal padding is moved onto each block */
   background: var(--np-bg);
   color: var(--np-fg);
-  font-family: var(--np-mono);   /* default font: Monospace */
+  font-family: var(--np-doc-font);   /* default font: Courier New */
   font-size: var(--np-fs);
   line-height: var(--np-lh);
   tab-size: 4;

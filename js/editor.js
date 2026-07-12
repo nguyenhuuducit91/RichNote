@@ -502,6 +502,16 @@
 
   /* ---------- Toolbar button states ---------- */
   function q(cmd) { try { return document.queryCommandState(cmd); } catch (e) { return false; } }
+
+  // Run a command that MUST emit a real element (<u>/<strike>/<sub>/<sup>) instead of a
+  // styleWithCSS span. A text-decoration / vertical-align CSS span can't be detected by the
+  // browser to toggle back OFF, so re-running the shortcut would fail to remove the format.
+  // Emit the tag with styleWithCSS off, then restore it to the editor's default (true).
+  function execTag(cmd) {
+    document.execCommand('styleWithCSS', false, false);
+    document.execCommand(cmd);
+    document.execCommand('styleWithCSS', false, true);
+  }
   function inCode() {
     var sel = window.getSelection();
     if (!sel.rangeCount) return false;
@@ -786,7 +796,7 @@
   function currentFontSizePx() {
     var el = selEl();
     var px = el ? Math.round(parseFloat(window.getComputedStyle(el).fontSize)) : 0;
-    return px || 12;
+    return px || 13;
   }
   // Bump the font size up/down by `delta` px (Ctrl+Shift+. / Ctrl+Shift+,)
   function changeFontSize(delta) {
@@ -934,18 +944,15 @@
     document.execCommand('removeFormat');                 // clean slate for character style
     if (fmt.bold)      document.execCommand('bold');
     if (fmt.italic)    document.execCommand('italic');
-    if (fmt.underline) document.execCommand('underline');
-    if (fmt.strike)    document.execCommand('strikeThrough');
+    // Real <u>/<strike> tags so a later Ctrl+U / Ctrl+Shift+X can toggle them back OFF.
+    if (fmt.underline) execTag('underline');
+    if (fmt.strike)    execTag('strikeThrough');
     if (fmt.color)      document.execCommand('foreColor', false, fmt.color);
     if (fmt.background) document.execCommand('hiliteColor', false, fmt.background);
     if (fmt.fontFamily) document.execCommand('fontName', false, fmt.fontFamily);
     if (fmt.fontSize)   applyFontSize(fmt.fontSize);
     if (fmt.code)       toggleCode();
-    if (fmt.vAlign) {
-      document.execCommand('styleWithCSS', false, false);
-      document.execCommand(fmt.vAlign === 'sub' ? 'subscript' : 'superscript');
-      document.execCommand('styleWithCSS', false, true);
-    }
+    if (fmt.vAlign) execTag(fmt.vAlign === 'sub' ? 'subscript' : 'superscript');
     onChange();
   }
   function fpArm(sticky) {
@@ -1371,13 +1378,10 @@
       for (var j = 0; j < cells.length; j++) {
         selectCellContents(cells[j]);
         if (q(qname) === want) continue;
-        if (cmd === 'sub' || cmd === 'super') {
-          document.execCommand('styleWithCSS', false, false);
-          document.execCommand(qname);
-          document.execCommand('styleWithCSS', false, true);
-        } else {
-          document.execCommand(qname);
-        }
+        // underline/strike/sub/super must be real tags (<u>/<strike>/<sub>/<sup>) — a
+        // styleWithCSS text-decoration span can't be detected to toggle back OFF.
+        if (cmd === 'sub' || cmd === 'super' || cmd === 'underline' || cmd === 'strike') execTag(qname);
+        else document.execCommand(qname);
       }
     } else {
       for (var k = 0; k < cells.length; k++) {
@@ -1420,10 +1424,11 @@
     switch (cmd) {
       case 'bold':      document.execCommand('bold'); break;
       case 'italic':    document.execCommand('italic'); break;
-      case 'underline': document.execCommand('underline'); break;
-      case 'strike':    document.execCommand('strikeThrough'); break;
-      case 'sub':       document.execCommand('styleWithCSS', false, false); document.execCommand('subscript');   document.execCommand('styleWithCSS', false, true); break;
-      case 'super':     document.execCommand('styleWithCSS', false, false); document.execCommand('superscript'); document.execCommand('styleWithCSS', false, true); break;
+      // Real <u>/<strike>/<sub>/<sup> tags — a styleWithCSS span can't be toggled back OFF.
+      case 'underline': execTag('underline'); break;
+      case 'strike':    execTag('strikeThrough'); break;
+      case 'sub':       execTag('subscript'); break;
+      case 'super':     execTag('superscript'); break;
       case 'code':      toggleCode(); break;
       case 'left':      document.execCommand('justifyLeft'); break;
       case 'center':    document.execCommand('justifyCenter'); break;
@@ -1484,12 +1489,12 @@
       case 'selectAll': document.execCommand('selectAll'); break;
       case 'bold':      document.execCommand('bold'); break;
       case 'italic':    document.execCommand('italic'); break;
-      case 'underline': document.execCommand('underline'); break;
-      case 'strike':    document.execCommand('strikeThrough'); break;
-      // Emit real <sub>/<sup> (styleWithCSS would instead make a bare
-      // vertical-align span that neither shrinks the text nor survives paste).
-      case 'sub':       document.execCommand('styleWithCSS', false, false); document.execCommand('subscript');   document.execCommand('styleWithCSS', false, true); break;
-      case 'super':     document.execCommand('styleWithCSS', false, false); document.execCommand('superscript'); document.execCommand('styleWithCSS', false, true); break;
+      // Real <u>/<strike>/<sub>/<sup> tags — a styleWithCSS span can't be toggled back OFF,
+      // and for sub/super it also wouldn't shrink the text or survive a paste.
+      case 'underline': execTag('underline'); break;
+      case 'strike':    execTag('strikeThrough'); break;
+      case 'sub':       execTag('subscript'); break;
+      case 'super':     execTag('superscript'); break;
       case 'code':      toggleCode(); break;
       case 'h1':        applyBlockFormat('H1'); break;
       case 'h2':        applyBlockFormat('H2'); break;
