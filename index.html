@@ -77,6 +77,8 @@
           <button class="menu-item" type="button" data-cmd="link"><span class="menu-check"></span><span class="menu-label">Link…</span><span class="menu-key">Ctrl+K</span></button>
           <button class="menu-item" type="button" data-cmd="ul"><span class="menu-check"></span><span class="menu-label">Bulleted list</span><span class="menu-key">Ctrl+Shift+8</span></button>
           <button class="menu-item" type="button" data-cmd="ol"><span class="menu-check"></span><span class="menu-label">Numbered list</span><span class="menu-key">Ctrl+Shift+7</span></button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" type="button" data-cmd="table"><span class="menu-check"></span><span class="menu-label">Table (3×3)</span><span class="menu-key"></span></button>
         </div>
       </div>
 
@@ -256,6 +258,15 @@
             </div>
           </div>
         </div>
+        <div class="ttable-wrap">
+          <button class="tbtn" id="tableBtn" type="button" title="Insert table">
+            <svg class="ico" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.7h12M6.4 3v10M10 3v10"/></svg>
+          </button>
+          <div class="ttable-pop" id="tablePop">
+            <div class="ttable-grid" id="tableGrid"></div>
+            <div class="ttable-label" id="tableLabel">Insert table</div>
+          </div>
+        </div>
       </div>
       <span class="tsep"></span>
 
@@ -291,7 +302,7 @@
       <div class="about-hero">
         <div class="about-logo"><img src="img/icon.svg" alt="RichNote" /></div>
         <h2 class="about-title">RichNote</h2>
-        <span class="about-ver" id="aboutVer">v1.1.10</span>
+        <span class="about-ver" id="aboutVer">v1.1.11</span>
         <p class="about-tagline">A beautiful WYSIWYG editor for Standard Notes</p>
       </div>
 

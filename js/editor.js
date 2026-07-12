@@ -40,6 +40,10 @@
   var listCur     = document.getElementById('listCur');
   var indentBtn   = document.getElementById('indentBtn');
   var indentPop   = document.getElementById('indentPop');
+  var tableBtn    = document.getElementById('tableBtn');
+  var tablePop    = document.getElementById('tablePop');
+  var tableGrid   = document.getElementById('tableGrid');
+  var tableLabel  = document.getElementById('tableLabel');
   var linkPop     = document.getElementById('linkPop');
   var linkInput   = document.getElementById('linkInput');
   var linkApply   = document.getElementById('linkApply');
@@ -85,7 +89,7 @@
   function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
-  var BLOCK_RE = /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|UL|OL|PRE|LI)$/;
+  var BLOCK_RE = /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|UL|OL|PRE|LI|TABLE)$/;
   // Wrap top-level text/inline nodes into blocks so every line is a block
   function normalizeBlocks() {
     var nodes = Array.prototype.slice.call(editor.childNodes);
@@ -131,9 +135,11 @@
   }
   /* ---------- Formatted paste (keep bold/colors/links) with sanitising ---------- */
   var PASTE_TAGS = { P:1, DIV:1, BR:1, SPAN:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, DEL:1,
-    MARK:1, CODE:1, PRE:1, A:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1, FONT:1, SUB:1, SUP:1 };
+    MARK:1, CODE:1, PRE:1, A:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1, FONT:1, SUB:1, SUP:1,
+    TABLE:1, THEAD:1, TBODY:1, TFOOT:1, TR:1, TD:1, TH:1, CAPTION:1, COLGROUP:1, COL:1 };
   var STYLE_KEEP = ['color', 'background-color', 'font-weight', 'font-style',
-    'text-decoration', 'text-decoration-line', 'font-size', 'font-family'];
+    'text-decoration', 'text-decoration-line', 'font-size', 'font-family', 'text-align',
+    'width', 'height', 'table-layout', 'vertical-align'];
 
   function filterStyle(el) {
     var out = '';
@@ -200,6 +206,7 @@
     document.execCommand('insertHTML', false, clean);
     stripSpuriousBg();
     normalizeBlocks();
+    styleTables();
     ensureContent();
     onChange();
   }
@@ -539,6 +546,8 @@
     renderGutter(cur);
     updateStatus(cur);
     updateToolbar();
+    updateTableTool(cur);
+    if (cellSel.length && !dragging && cur !== cellSelTable) clearCellSel();
   }
 
   function onChange() { refresh(); save(); }
@@ -709,6 +718,431 @@
     refresh();
   }
 
+  /* ============================================================
+     TABLES
+     ============================================================ */
+  var TABLE_MAX_ROWS = 20, TABLE_MAX_COLS = 10;
+  // Ensure every table carries the rn-table class (so pasted/loaded tables get styled)
+  function styleTables() {
+    var tbls = editor.querySelectorAll('table:not(.rn-table)');
+    for (var i = 0; i < tbls.length; i++) tbls[i].classList.add('rn-table');
+  }
+  function cellOf(node) { return closestTag(node, 'TD') || closestTag(node, 'TH'); }
+  function currentCell() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !editor.contains(sel.anchorNode)) return null;
+    return cellOf(sel.anchorNode);
+  }
+  function tableOf(node) { return closestTag(node, 'TABLE'); }
+  function placeCaretInCell(cell) {
+    if (!cell) return;
+    var r = document.createRange();
+    r.selectNodeContents(cell);
+    r.collapse(true);
+    var s = window.getSelection();
+    s.removeAllRanges(); s.addRange(r);
+    editor.focus();
+  }
+  function isBlockEmpty(b) {
+    return b && b.nodeType === 1 && !/\S/.test(b.textContent) && !b.querySelector('img,table,hr');
+  }
+  function makeCell(tag) {
+    var c = document.createElement(tag);
+    c.appendChild(document.createElement('br'));
+    return c;
+  }
+  function insertTable(rows, cols) {
+    rows = Math.max(1, Math.min(TABLE_MAX_ROWS, rows | 0));
+    cols = Math.max(1, Math.min(TABLE_MAX_COLS, cols | 0));
+    editor.focus();
+    // Insert at the live caret; only fall back to the saved range if the selection
+    // isn't inside the editor (so a stale saved range can't move the insert point).
+    var isel = window.getSelection();
+    if (!isel.rangeCount || !editor.contains(isel.anchorNode)) restoreSel();
+    var table = document.createElement('table');
+    table.className = 'rn-table';
+    var tbody = document.createElement('tbody');
+    for (var r = 0; r < rows; r++) {
+      var tr = document.createElement('tr');
+      for (var c = 0; c < cols; c++) tr.appendChild(makeCell(r === 0 ? 'th' : 'td'));
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+
+    var block = currentBlock();
+    if (block && isBlockEmpty(block)) {
+      editor.replaceChild(table, block);
+    } else if (block) {
+      block.parentNode.insertBefore(table, block.nextSibling);
+    } else {
+      editor.appendChild(table);
+    }
+    // Always keep a paragraph after the table so the caret can leave it
+    if (!table.nextElementSibling) {
+      var p = document.createElement('p'); p.appendChild(document.createElement('br'));
+      editor.insertBefore(p, table.nextSibling);
+    }
+    placeCaretInCell(table.querySelector('th,td'));
+    ensureContent();
+    onChange();
+  }
+
+  // Tab / Shift+Tab move between cells; Tab past the last cell adds a new row.
+  function moveCell(cell, dir) {
+    var table = tableOf(cell);
+    if (!table) return;
+    var cells = Array.prototype.slice.call(table.querySelectorAll('th,td'));
+    var idx = cells.indexOf(cell);
+    var next = cells[idx + dir];
+    if (next) { placeCaretInCell(next); return; }
+    if (dir > 0) {                       // past the last cell → append a row and enter it
+      addRow(cell, 1);
+      var rows = table.rows;
+      placeCaretInCell(rows[rows.length - 1].cells[0]);
+    } else {                             // before the first cell → move to the block above
+      var prev = table.previousElementSibling;
+      if (prev) { var rr = document.createRange(); rr.selectNodeContents(prev); rr.collapse(false);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(rr); }
+    }
+  }
+
+  function colIndexOf(cell) {
+    var tr = cell.parentNode, n = 0;
+    for (var i = 0; i < tr.cells.length; i++) { if (tr.cells[i] === cell) return n; n++; }
+    return 0;
+  }
+  function addRow(cell, dir) {
+    var tr = cell.parentNode, table = tableOf(cell);
+    var count = tr.cells.length;
+    var newTr = document.createElement('tr');
+    for (var i = 0; i < count; i++) newTr.appendChild(makeCell('td'));
+    tr.parentNode.insertBefore(newTr, dir < 0 ? tr : tr.nextSibling);
+    onChange();
+    return newTr;
+  }
+  function addCol(cell, dir) {
+    var table = tableOf(cell), at = colIndexOf(cell);
+    var rows = table.rows;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var ref = row.cells[at];
+      var tag = (ref && ref.tagName === 'TH') ? 'th' : 'td';
+      var nc = makeCell(tag);
+      if (dir < 0) row.insertBefore(nc, ref || null);
+      else row.insertBefore(nc, ref ? ref.nextSibling : null);
+    }
+    var cg = table.querySelector('colgroup');   // keep colgroup in sync for resizing
+    if (cg) {
+      var refCol = cg.children[at];
+      var ncol = document.createElement('col');
+      ncol.style.width = (refCol && refCol.style.width) || '80px';
+      cg.insertBefore(ncol, dir < 0 ? (refCol || null) : (refCol ? refCol.nextSibling : null));
+      syncTableWidth(table);
+    }
+    onChange();
+  }
+  function delRow(cell) {
+    var tr = cell.parentNode, table = tableOf(cell);
+    if (table.rows.length <= 1) { delTable(cell); return; }
+    var focusTr = tr.nextElementSibling || tr.previousElementSibling;
+    tr.parentNode.removeChild(tr);
+    if (focusTr) placeCaretInCell(focusTr.cells[0]);
+    onChange();
+  }
+  function delCol(cell) {
+    var table = tableOf(cell), at = colIndexOf(cell);
+    if (table.rows[0] && table.rows[0].cells.length <= 1) { delTable(cell); return; }
+    var rows = table.rows, focus = null;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i], c = row.cells[at];
+      if (c) { if (!focus) focus = row.cells[at + 1] || row.cells[at - 1]; row.removeChild(c); }
+    }
+    var cg = table.querySelector('colgroup');
+    if (cg && cg.children[at]) { cg.removeChild(cg.children[at]); syncTableWidth(table); }
+    if (focus) placeCaretInCell(focus);
+    onChange();
+  }
+  function delTable(cell) {
+    var table = tableOf(cell);
+    if (!table) return;
+    var focus = table.nextElementSibling || table.previousElementSibling;
+    if (!focus) { focus = document.createElement('p'); focus.appendChild(document.createElement('br')); editor.insertBefore(focus, table); }
+    table.parentNode.removeChild(table);
+    hideTableTool();
+    var r = document.createRange(); r.selectNodeContents(focus); r.collapse(true);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    editor.focus();
+    ensureContent();
+    onChange();
+  }
+
+  /* ---------- Floating table toolbar (shown while the caret is inside a table) ---------- */
+  var tableTool = null;
+  function buildTableTool() {
+    tableTool = document.createElement('div');
+    tableTool.className = 'rn-table-tool';
+    tableTool.innerHTML =
+      '<button type="button" class="rn-tt-btn" data-tact="rowAbove" title="Insert row above"><svg class="ico" viewBox="0 0 16 16"><path d="M2 9.5h12M2 12.5h12"/><path d="M8 2v4M6 4h4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn" data-tact="rowBelow" title="Insert row below"><svg class="ico" viewBox="0 0 16 16"><path d="M2 3.5h12M2 6.5h12"/><path d="M8 10v4M6 12h4"/></svg></button>' +
+      '<span class="rn-tt-sep"></span>' +
+      '<button type="button" class="rn-tt-btn" data-tact="colLeft" title="Insert column left"><svg class="ico" viewBox="0 0 16 16"><path d="M9.5 2v12M12.5 2v12"/><path d="M2 8h4M4 6v4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn" data-tact="colRight" title="Insert column right"><svg class="ico" viewBox="0 0 16 16"><path d="M3.5 2v12M6.5 2v12"/><path d="M10 8h4M12 6v4"/></svg></button>' +
+      '<span class="rn-tt-sep"></span>' +
+      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delRow" title="Delete row"><svg class="ico" viewBox="0 0 16 16"><path d="M2 6h12M2 10h12"/><path d="M6 13.5h4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delCol" title="Delete column"><svg class="ico" viewBox="0 0 16 16"><path d="M6 2v12M10 2v12"/><path d="M12.5 6v4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delTable" title="Delete table"><svg class="ico" viewBox="0 0 16 16"><path d="M3 4.5h10"/><path d="M5.5 4.5V3h5v1.5"/><path d="M4.2 4.5 5 13.5h6l.8-9"/></svg></button>';
+    (document.querySelector('.editor-area') || document.body).appendChild(tableTool);
+    tableTool.addEventListener('mousedown', function (ev) { ev.preventDefault(); });   // keep the caret
+    tableTool.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.rn-tt-btn'); if (!b) return;
+      var cell = currentCell(); if (!cell) return;
+      switch (b.dataset.tact) {
+        case 'rowAbove': addRow(cell, -1); break;
+        case 'rowBelow': addRow(cell, 1); break;
+        case 'colLeft':  addCol(cell, -1); break;
+        case 'colRight': addCol(cell, 1); break;
+        case 'delRow':   delRow(cell); break;
+        case 'delCol':   delCol(cell); break;
+        case 'delTable': delTable(cell); break;
+      }
+    });
+  }
+  function hideTableTool() { if (tableTool) tableTool.classList.remove('open'); }
+  function positionTableTool(table) {
+    if (!tableTool) return;
+    var t = table.getBoundingClientRect();
+    var host = editor.getBoundingClientRect();
+    var top = Math.max(host.top + 2, t.top - tableTool.offsetHeight - 4);
+    var left = Math.min(t.left, window.innerWidth - tableTool.offsetWidth - 8);
+    tableTool.style.top = top + 'px';
+    tableTool.style.left = Math.max(6, left) + 'px';
+  }
+  function updateTableTool(cur) {
+    var table = (cur && cur.tagName === 'TABLE') ? cur : null;
+    if (!table) { hideTableTool(); return; }
+    if (!tableTool) buildTableTool();
+    tableTool.classList.add('open');
+    positionTableTool(table);
+  }
+
+  /* ============================================================
+     TABLE INTERACTION — column/row resize + multi-cell selection
+     ============================================================ */
+  var RZ_EDGE = 5, RZ_MIN_COL = 34, RZ_MIN_ROW = 22;
+  var rz = null;                            // active resize drag
+  var hoverEdge = null, hoverCell = null;   // resize hover target
+  var cellSel = [], cellSelTable = null;    // selected cells (multi-cell selection)
+  var dragAnchor = null, dragging = false;  // cell drag-selection state
+
+  function colCount(table) {
+    var n = 0, rows = table.rows;
+    for (var i = 0; i < rows.length; i++) n = Math.max(n, rows[i].cells.length);
+    return n;
+  }
+  function syncTableWidth(table) {
+    var cg = table.querySelector('colgroup'); if (!cg) return;
+    var sum = 0;
+    for (var i = 0; i < cg.children.length; i++) sum += parseFloat(cg.children[i].style.width) || 0;
+    if (sum) table.style.width = sum + 'px';
+  }
+  // Freeze current column widths into a <colgroup> and switch to fixed layout so a drag
+  // gives predictable, WYSIWYG resizing (like Word). Done lazily on the first resize.
+  function ensureColgroup(table) {
+    var cg = table.querySelector('colgroup');
+    if (cg) return cg;
+    cg = document.createElement('colgroup');
+    var first = table.rows[0], n = colCount(table);
+    for (var i = 0; i < n; i++) {
+      var col = document.createElement('col');
+      var cell = first && first.cells[i];
+      col.style.width = (cell ? Math.round(cell.getBoundingClientRect().width) : 80) + 'px';
+      cg.appendChild(col);
+    }
+    table.insertBefore(cg, table.firstChild);
+    table.style.tableLayout = 'fixed';
+    syncTableWidth(table);
+    return cg;
+  }
+
+  /* ---------- Resize: hover cursor + drag ---------- */
+  editor.addEventListener('mousemove', function (ev) {
+    if (rz || dragging) return;
+    var cell = ev.target.closest ? ev.target.closest('td,th') : null;
+    hoverEdge = null; hoverCell = null;
+    if (cell && editor.contains(cell)) {
+      var r = cell.getBoundingClientRect();
+      if (Math.abs(ev.clientX - r.right) <= RZ_EDGE) { hoverEdge = 'col'; hoverCell = cell; }
+      else if (Math.abs(ev.clientY - r.bottom) <= RZ_EDGE) { hoverEdge = 'row'; hoverCell = cell; }
+    }
+    editor.style.cursor = hoverEdge === 'col' ? 'col-resize' : hoverEdge === 'row' ? 'row-resize' : '';
+  });
+
+  function startResize(ev, mode, cell) {
+    var table = tableOf(cell); if (!table) return;
+    if (mode === 'col') {
+      var cg = ensureColgroup(table);
+      var col = cg.children[colIndexOf(cell)];
+      rz = { mode: 'col', table: table, col: col, startX: ev.clientX,
+             startW: parseFloat(col.style.width) || cell.getBoundingClientRect().width };
+    } else {
+      var tr = cell.parentNode;
+      rz = { mode: 'row', tr: tr, startY: ev.clientY, startH: tr.getBoundingClientRect().height };
+    }
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onResizeMove, true);
+    window.addEventListener('mouseup', onResizeUp, true);
+  }
+  function onResizeMove(ev) {
+    if (!rz) return;
+    if (rz.mode === 'col') {
+      rz.col.style.width = Math.max(RZ_MIN_COL, rz.startW + (ev.clientX - rz.startX)) + 'px';
+      syncTableWidth(rz.table);
+    } else {
+      rz.tr.style.height = Math.max(RZ_MIN_ROW, rz.startH + (ev.clientY - rz.startY)) + 'px';
+    }
+  }
+  function onResizeUp() {
+    window.removeEventListener('mousemove', onResizeMove, true);
+    window.removeEventListener('mouseup', onResizeUp, true);
+    document.body.style.userSelect = '';
+    rz = null;
+    onChange();
+  }
+
+  /* ---------- Multi-cell selection (drag a rectangle; covers row / column / any range) ---------- */
+  function cellRC(cell) {
+    var table = tableOf(cell), tr = cell.parentNode;
+    return { r: Array.prototype.indexOf.call(table.rows, tr), c: colIndexOf(cell) };
+  }
+  function clearCellSel() {
+    for (var i = 0; i < cellSel.length; i++) cellSel[i].classList.remove('rn-cell-sel');
+    cellSel = []; cellSelTable = null;
+  }
+  function selectCellRange(a, b) {
+    var table = tableOf(a);
+    if (!table || tableOf(b) !== table) return;
+    clearCellSel();
+    var ra = cellRC(a), rb = cellRC(b);
+    var r1 = Math.min(ra.r, rb.r), r2 = Math.max(ra.r, rb.r);
+    var c1 = Math.min(ra.c, rb.c), c2 = Math.max(ra.c, rb.c);
+    var rows = table.rows;
+    for (var r = r1; r <= r2; r++)
+      for (var c = c1; c <= c2; c++) {
+        var cell = rows[r] && rows[r].cells[c];
+        if (cell) { cell.classList.add('rn-cell-sel'); cellSel.push(cell); }
+      }
+    cellSelTable = table;
+  }
+  function reselectCells(cells) {
+    clearCellSel();
+    for (var i = 0; i < cells.length; i++) { cells[i].classList.add('rn-cell-sel'); cellSel.push(cells[i]); }
+    cellSelTable = cells.length ? tableOf(cells[0]) : null;
+  }
+  function hasCellSel() { return cellSel.length > 0; }
+
+  // mousedown (capture): start a resize on an edge, else begin a cell drag-selection.
+  editor.addEventListener('mousedown', function (ev) {
+    if (ev.button !== 0) return;
+    if (hoverEdge && hoverCell) { ev.preventDefault(); startResize(ev, hoverEdge, hoverCell); return; }
+    clearCellSel();
+    var cell = ev.target.closest ? ev.target.closest('td,th') : null;
+    if (cell && editor.contains(cell)) {
+      dragAnchor = cell; dragging = false;
+      window.addEventListener('mousemove', onCellDragMove, true);
+      window.addEventListener('mouseup', onCellDragUp, true);
+    }
+  }, true);
+
+  function onCellDragMove(ev) {
+    if (!dragAnchor) return;
+    var el = document.elementFromPoint(ev.clientX, ev.clientY);
+    var over = el && el.closest ? el.closest('td,th') : null;
+    if (!over || !editor.contains(over) || tableOf(over) !== tableOf(dragAnchor)) return;
+    if (over === dragAnchor && !dragging) return;   // still inside the anchor → normal text selection
+    if (!dragging) { dragging = true; editor.style.userSelect = 'none'; }
+    ev.preventDefault();
+    window.getSelection().removeAllRanges();          // suppress the native cross-cell highlight
+    selectCellRange(dragAnchor, over);
+  }
+  function onCellDragUp() {
+    window.removeEventListener('mousemove', onCellDragMove, true);
+    window.removeEventListener('mouseup', onCellDragUp, true);
+    editor.style.userSelect = '';
+    dragAnchor = null;
+    if (dragging && cellSel.length) placeCaretInCell(cellSel[0]);   // give a caret so typing works
+    setTimeout(function () { dragging = false; }, 0);
+  }
+
+  /* ---------- Apply formatting / colour to every selected cell ---------- */
+  function forEachSelCell(fn) {
+    var cells = cellSel.slice(), sel = window.getSelection();
+    for (var i = 0; i < cells.length; i++) {
+      var r = document.createRange(); r.selectNodeContents(cells[i]);
+      sel.removeAllRanges(); sel.addRange(r);
+      fn(cells[i]);
+    }
+    reselectCells(cells);
+    onChange();
+  }
+  var CELL_CMDS = { bold: 1, italic: 1, underline: 1, strike: 1, sub: 1, super: 1, code: 1,
+    left: 1, center: 1, right: 1, justify: 1, clear: 1 };
+  var CELL_TOGGLE = { bold: 'bold', italic: 'italic', underline: 'underline',
+    strike: 'strikeThrough', sub: 'subscript', super: 'superscript' };
+  var CELL_ALIGN = { left: 'justifyLeft', center: 'justifyCenter', right: 'justifyRight', justify: 'justifyFull' };
+  function selectCellContents(cell) {
+    var r = document.createRange(); r.selectNodeContents(cell);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  function applyCmdToCells(cmd) {
+    var cells = cellSel.slice();
+    if (CELL_TOGGLE[cmd]) {
+      // Uniform target: turn the format ON for all cells unless every cell already has it
+      // (avoids toggling CSS-bold <th> headers the wrong way in a mixed selection).
+      var qname = CELL_TOGGLE[cmd], allOn = true;
+      for (var i = 0; i < cells.length; i++) { selectCellContents(cells[i]); if (!q(qname)) { allOn = false; break; } }
+      var want = !allOn;
+      for (var j = 0; j < cells.length; j++) {
+        selectCellContents(cells[j]);
+        if (q(qname) === want) continue;
+        if (cmd === 'sub' || cmd === 'super') {
+          document.execCommand('styleWithCSS', false, false);
+          document.execCommand(qname);
+          document.execCommand('styleWithCSS', false, true);
+        } else {
+          document.execCommand(qname);
+        }
+      }
+    } else {
+      for (var k = 0; k < cells.length; k++) {
+        selectCellContents(cells[k]);
+        if (CELL_ALIGN[cmd]) document.execCommand(CELL_ALIGN[cmd]);
+        else if (cmd === 'code') toggleCode();
+        else if (cmd === 'clear') document.execCommand('removeFormat');
+      }
+    }
+    reselectCells(cells);
+    onChange();
+  }
+  function applyColorToCells(kind, color) {
+    forEachSelCell(function () { doColor(kind, color); });
+  }
+  // Fill the whole cell background (Word-style shading), not just the text highlight.
+  function fillCells(cells, color) {
+    for (var i = 0; i < cells.length; i++) {
+      if (color === 'transparent' || color === 'none') cells[i].style.removeProperty('background-color');
+      else cells[i].style.backgroundColor = color;
+      if (!cells[i].getAttribute('style')) cells[i].removeAttribute('style');
+    }
+    if (backBar) backBar.style.background = (color === 'transparent' || color === 'none') ? 'transparent' : color;
+    onChange();
+  }
+  // The target cells for a fill: the multi-cell selection, or the single cell at the caret.
+  function fillTargetCells() {
+    if (hasCellSel()) return cellSel.slice();
+    var cc = currentCell();
+    return cc ? [cc] : null;
+  }
+
   /* ---------- Show / hide the formatting toolbar (default: shown) ---------- */
   var toolbarOn = true;
   try { toolbarOn = localStorage.getItem('richnote-toolbar') !== '0'; } catch (e) {}
@@ -727,6 +1161,8 @@
 
   function exec(cmd) {
     editor.focus();
+    // With a multi-cell selection active, formatting applies to every selected cell
+    if (hasCellSel() && CELL_CMDS[cmd]) { applyCmdToCells(cmd); return; }
     if (REPEATABLE[cmd]) lastAction = (function (c) { return function () { exec(c); }; })(cmd);
     switch (cmd) {
       case 'undo':      document.execCommand('undo'); break;
@@ -768,6 +1204,7 @@
       case 'minimap':   if (window.__richnoteMinimap) window.__richnoteMinimap.toggle(); return;
       case 'find':        if (window.__richnoteFind) window.__richnoteFind.open(); return;
       case 'findReplace': if (window.__richnoteFind) window.__richnoteFind.openReplace(); return;
+      case 'table':       insertTable(3, 3); return;
       case 'toggleToolbar': toggleToolbar(); return;
     }
     onChange();
@@ -803,7 +1240,7 @@
   });
   document.addEventListener('click', function (ev) {
     if (!ev.target.closest('#menubar')) closeMenus();
-    if (!ev.target.closest('.tcolor-wrap') && !ev.target.closest('.link-wrap') && !ev.target.closest('.tsize-wrap') && !ev.target.closest('.tdrop')) closePopups();
+    if (!ev.target.closest('.tcolor-wrap') && !ev.target.closest('.link-wrap') && !ev.target.closest('.tsize-wrap') && !ev.target.closest('.tdrop') && !ev.target.closest('.ttable-wrap')) closePopups();
   });
 
   /* ---------- Toolbar events ---------- */
@@ -841,6 +1278,57 @@
   wireDropdown(listBtn, listPop);
   wireDropdown(indentBtn, indentPop);
   wireDropdown(fmtBtn, fmtPop);
+
+  /* ---------- Table insert picker (hover a grid to choose size) ---------- */
+  (function initTablePicker() {
+    if (!tableBtn || !tablePop || !tableGrid) return;
+    var GRID_R = 8, GRID_C = 8, hoverR = 0, hoverC = 0;
+    var html = '';
+    for (var r = 1; r <= GRID_R; r++)
+      for (var c = 1; c <= GRID_C; c++)
+        html += '<span class="ttable-cell" data-r="' + r + '" data-c="' + c + '"></span>';
+    tableGrid.innerHTML = html;
+    tableGrid.style.gridTemplateColumns = 'repeat(' + GRID_C + ', 1fr)';
+    function mark(rr, cc) {
+      hoverR = rr; hoverC = cc;
+      var cells = tableGrid.children;
+      for (var i = 0; i < cells.length; i++) {
+        var cr = +cells[i].dataset.r, cc2 = +cells[i].dataset.c;
+        cells[i].classList.toggle('on', cr <= rr && cc2 <= cc);
+      }
+      tableLabel.textContent = rr && cc ? (cc + ' × ' + rr) : 'Insert table';
+    }
+    tableBtn.addEventListener('mousedown', function (ev) { ev.preventDefault(); saveSel(); });
+    tableBtn.addEventListener('click', function () {
+      var open = tablePop.classList.contains('open');
+      closePopups(); closeMenus();
+      if (!open) { mark(0, 0); tablePop.classList.add('open'); positionPopup(tablePop, tableBtn); }
+    });
+    tableGrid.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    tableGrid.addEventListener('mouseover', function (ev) {
+      var cell = ev.target.closest('.ttable-cell'); if (!cell) return;
+      mark(+cell.dataset.r, +cell.dataset.c);
+    });
+    tableGrid.addEventListener('click', function (ev) {
+      var cell = ev.target.closest('.ttable-cell'); if (!cell) return;
+      tablePop.classList.remove('open');
+      insertTable(+cell.dataset.r, +cell.dataset.c);
+    });
+  })();
+
+  // Keep the floating table toolbar glued to its table as the editor scrolls
+  editor.addEventListener('scroll', function () {
+    if (tableTool && tableTool.classList.contains('open')) {
+      var cur = currentBlock();
+      if (cur && cur.tagName === 'TABLE') positionTableTool(cur); else hideTableTool();
+    }
+  }, { passive: true });
+  window.addEventListener('resize', function () {
+    if (tableTool && tableTool.classList.contains('open')) {
+      var cur = currentBlock();
+      if (cur && cur.tagName === 'TABLE') positionTableTool(cur);
+    }
+  });
 
   styleSelect.addEventListener('change', function () {
     restoreSel();
@@ -916,6 +1404,7 @@
     for (var i = 0; i < ps.length; i++) ps[i].classList.remove('open');
     if (linkPop) linkPop.classList.remove('open');
     if (sizePop) sizePop.classList.remove('open');
+    if (tablePop) tablePop.classList.remove('open');
     var dds = toolbar.querySelectorAll('.tdrop-pop.open');
     for (var d = 0; d < dds.length; d++) dds[d].classList.remove('open');
   }
@@ -928,6 +1417,17 @@
     onChange();
   }
   function applyColor(kind, color) {
+    // Highlight colour inside a table = fill the whole cell (Word-style shading), unless
+    // the user has an explicit text selection to highlight. Text colour still colours text.
+    if (kind === 'back') {
+      var sel = window.getSelection();
+      var textSel = sel.rangeCount && !sel.getRangeAt(0).collapsed && !hasCellSel();
+      if (!textSel) {
+        var targets = fillTargetCells();
+        if (targets) { fillCells(targets, color); closePopups(); return; }
+      }
+    }
+    if (kind === 'fore' && hasCellSel()) { applyColorToCells('fore', color); closePopups(); return; }
     restoreSel();
     doColor(kind, color);
     lastAction = function () { doColor(kind, color); };
@@ -1009,6 +1509,7 @@
       link: s('<path d="M6.7 9.3 9.3 6.7"/><path d="M8.4 4.6l1-1a2.7 2.7 0 0 1 3.9 3.9l-1 1"/><path d="M7.6 11.4l-1 1a2.7 2.7 0 0 1-3.9-3.9l1-1"/>'),
       ul: s('<circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/>'),
       ol: s('<path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text>'),
+      table: s('<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.7h12M6.4 3v10M10 3v10"/>'),
       wrap: s('<path d="M2 4h12M2 8h8.4a2.4 2.4 0 0 1 0 4.8H7.4"/><path d="M9.2 10.8 7.4 12.8l1.8 2"/>'),
       minimap: s('<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M10.2 3.5v9" opacity=".55"/><path d="M4.6 5.6h3.4M4.6 8h4.2M4.6 10.4h2.6" stroke-width="1"/>'),
       donate: s('<path class="fill" d="M8 13.4C8 13.4 2.6 10 2.6 6.3A2.6 2.6 0 0 1 8 5.1a2.6 2.6 0 0 1 5.4 1.2C13.4 10 8 13.4 8 13.4z"/>'),
@@ -1084,6 +1585,20 @@
   editor.addEventListener('keydown', function (ev) {
     var mod = ev.ctrlKey || ev.metaKey;
 
+    // Multi-cell selection: Esc clears it, Delete/Backspace empties the cells,
+    // and typing a character collapses back to normal single-caret editing.
+    if (hasCellSel()) {
+      if (ev.key === 'Escape') { ev.preventDefault(); clearCellSel(); return; }
+      if ((ev.key === 'Backspace' || ev.key === 'Delete') && cellSel.length > 1) {
+        ev.preventDefault();
+        for (var ci = 0; ci < cellSel.length; ci++) cellSel[ci].innerHTML = '<br>';
+        placeCaretInCell(cellSel[0]);
+        onChange();
+        return;
+      }
+      if (ev.key.length === 1 && !mod && !ev.altKey) clearCellSel();
+    }
+
     // F4: repeat the last formatting action (like Google Sheets)
     if (ev.key === 'F4') { ev.preventDefault(); if (lastAction) lastAction(); return; }
 
@@ -1094,9 +1609,11 @@
       return;
     }
 
-    // Tab / Shift+Tab: indent (multi-line when several blocks are selected)
+    // Tab / Shift+Tab: inside a table move between cells; otherwise indent / insert a tab
     if (ev.key === 'Tab') {
       ev.preventDefault();
+      var tabCell = currentCell();
+      if (tabCell) { moveCell(tabCell, ev.shiftKey ? -1 : 1); return; }
       var blocks = selectedBlocks();
       if (ev.shiftKey || blocks.length > 1) indentBlocks(ev.shiftKey ? -1 : 1);
       else document.execCommand('insertText', false, '\t');
@@ -1143,6 +1660,11 @@
       else if (c === 'KeyK') exec('link');
       else if (c === 'Backslash') exec('clear');
       else if (c === 'KeyY') { document.execCommand('redo'); onChange(); }
+      // With a multi-cell selection, route Ctrl+B/I/U through exec so the format applies
+      // to every selected cell (otherwise the browser would only affect the caret's cell).
+      else if (c === 'KeyB' && hasCellSel()) exec('bold');
+      else if (c === 'KeyI' && hasCellSel()) exec('italic');
+      else if (c === 'KeyU' && hasCellSel()) exec('underline');
       else handled = false;   // b/i/u/z/a/c/x/v: let the browser handle them
     }
     if (handled) ev.preventDefault();
@@ -1152,6 +1674,7 @@
   function loadContent(html, title) {
     editor.innerHTML = html || '<p><br></p>';
     normalizeBlocks();
+    styleTables();
     // Convert legacy indentation (margin-left) to the new padding-based --indent
     // so the current-line highlight reaches the left edge.
     Array.prototype.forEach.call(editor.children, function (b) {
