@@ -1,6 +1,6 @@
 {
   "name": "richnote",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "A beautiful WYSIWYG rich-text editor for Standard Notes (light theme, Word-like toolbar, line numbers, shortcuts).",
   "keywords": [
     "standard-notes",

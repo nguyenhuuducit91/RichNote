@@ -9,23 +9,28 @@
  */
 
 :root {
-  --np-bg:        #ffffff;
-  --np-fg:        #1f2328;
-  --np-gutter-bg: #f5f6f8;
-  --np-gutter-fg: #9aa0a6;
-  --np-border:    #dfe1e6;
-  --np-accent:    #2f6fdb;
-  --np-accent-soft: #e4edfb;
+  /* Follow the active Standard Notes theme (StyleKit variables). Each falls back to
+     the built-in light theme when no SN theme is injected (standalone / preview), so
+     light stays light and a dark SN theme makes the whole editor dark. */
+  --np-bg:        var(--sn-stylekit-editor-background-color, var(--sn-stylekit-background-color, #ffffff));
+  --np-fg:        var(--sn-stylekit-editor-foreground-color, var(--sn-stylekit-foreground-color, #1f2328));
+  --np-gutter-bg: var(--sn-stylekit-secondary-background-color, #f5f6f8);
+  --np-gutter-fg: var(--sn-stylekit-passive-color-1, #9aa0a6);
+  --np-border:    var(--sn-stylekit-border-color, #dfe1e6);
+  --np-accent:    var(--sn-stylekit-info-color, #2f6fdb);
+  --np-accent-contrast: var(--sn-stylekit-info-contrast-color, #ffffff);
+  /* Derived so they adapt to light AND dark themes */
+  --np-accent-soft:  color-mix(in srgb, var(--np-accent) 16%, var(--np-bg));
+  --np-current-line: color-mix(in srgb, var(--np-accent) 12%, transparent);
 
-  /* Toolbar */
-  --tb-bg-top:    #fbfcfd;
-  --tb-bg-bot:    #eef0f3;
-  --tb-btn-fg:    #3a4149;
-  --tb-hover:     #e7ebf1;
+  /* Toolbar / menubar / status chrome */
+  --tb-bg-top:    var(--sn-stylekit-contrast-background-color, #fbfcfd);
+  --tb-bg-bot:    var(--sn-stylekit-contrast-background-color, #eef0f3);
+  --tb-btn-fg:    var(--sn-stylekit-foreground-color, #3a4149);
+  --tb-hover:     color-mix(in srgb, var(--np-fg) 9%, transparent);
   --tb-shadow:    0 1px 0 rgba(16,24,40,.04), 0 2px 6px rgba(16,24,40,.06);
 
-  --np-status-bg: #eef0f3;
-  --np-current-line: rgba(47, 111, 219, 0.09);
+  --np-status-bg: var(--sn-stylekit-contrast-background-color, #eef0f3);
 
   --np-doc-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --np-mono: "Consolas", "JetBrains Mono", "DejaVu Sans Mono", "Courier New", monospace;
@@ -37,6 +42,13 @@
 }
 
 * { box-sizing: border-box; }
+
+/* Smooth the colour change when the Standard Notes theme switches (the theme CSS is
+   injected as a stylesheet and loads asynchronously, so this eases the transition). */
+.app, .menubar, .toolbar, .doc, .gutter, .gutter .ln, .statusbar,
+.menu-dropdown, .modal, .color-pop, .link-pop, .mc-find, .tsize-pop {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
 
 html, body {
   margin: 0;
@@ -100,7 +112,7 @@ html, body {
   min-width: 200px;
   margin-top: 2px;
   padding: 4px;
-  background: #fff;
+  background: var(--np-bg);
   border: 1px solid var(--np-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(16,24,40,.14);
@@ -231,7 +243,7 @@ html, body {
   padding: 0 22px 0 8px;
   border: 1px solid var(--np-border);
   border-radius: 6px;
-  background: #fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23788' stroke-width='1.5' stroke-linecap='round'/></svg>") no-repeat right 9px center;
+  background: var(--np-bg) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23788' stroke-width='1.5' stroke-linecap='round'/></svg>") no-repeat right 9px center;
   color: var(--np-fg);
   font-family: var(--np-ui-font);
   font-size: 13px;
@@ -277,7 +289,7 @@ html, body {
   max-height: 260px;
   overflow-y: auto;
   padding: 4px;
-  background: #fff;
+  background: var(--np-bg);
   border: 1px solid var(--np-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(16,24,40,.14);
@@ -338,7 +350,7 @@ html, body {
   display: none;
   position: fixed;             /* fixed so the toolbar overflow can't clip it */
   padding: 8px;
-  background: #fff;
+  background: var(--np-bg);
   border: 1px solid var(--np-border);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(16,24,40,.16);
@@ -395,7 +407,7 @@ html, body {
   padding: 6px 6px;
   border: 1px solid var(--np-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--np-bg);
   color: var(--np-fg);
   font-family: var(--np-ui-font);
   font-size: 13px;
@@ -440,7 +452,7 @@ html, body {
   max-width: 396px;
   max-height: 92vh;
   overflow-y: auto;
-  background: #fff;
+  background: var(--np-bg);
   border-radius: 16px;
   box-shadow: 0 30px 70px rgba(16, 24, 40, 0.4);
   padding: 22px 22px 16px;
@@ -610,7 +622,7 @@ a.about-row:hover { background: var(--np-accent-soft); }
   position: fixed;             /* fixed so the toolbar overflow can't clip it */
   padding: 14px;
   width: 300px;
-  background: #fff;
+  background: var(--np-bg);
   border: 1px solid var(--np-border);
   border-radius: 12px;
   box-shadow: 0 14px 36px rgba(16, 24, 40, .18);
@@ -657,7 +669,7 @@ a.about-row:hover { background: var(--np-accent-soft); }
   padding: 0 16px;
   border: 1px solid var(--np-border);
   border-radius: 9px;
-  background: #fff;
+  background: var(--np-bg);
   color: var(--np-fg);
   font-family: var(--np-ui-font);
   font-size: 13px;
@@ -748,13 +760,13 @@ a.about-row:hover { background: var(--np-accent-soft); }
 .doc blockquote {
   border-left: 3px solid var(--np-accent);
   padding-left: calc(var(--np-pad-x) + var(--indent, 0px) + 10px);
-  color: #556;
+  color: color-mix(in srgb, var(--np-fg) 74%, var(--np-bg));
 }
 .doc ul, .doc ol { padding-left: calc(var(--np-pad-x) + var(--indent, 0px) + 1.6em); }
 .doc code {
   font-family: var(--np-mono);
   font-size: .92em;
-  background: #eef0f3;
+  background: color-mix(in srgb, var(--np-fg) 9%, transparent);
   padding: .1em .35em;
   border-radius: 3px;
 }
@@ -884,7 +896,7 @@ a.about-row:hover { background: var(--np-accent-soft); }
   align-items: center;
   gap: 6px;
   padding: 7px 8px;
-  background: #fff;
+  background: var(--np-bg);
   border: 1px solid var(--np-border);
   border-radius: 12px;
   box-shadow: 0 10px 28px rgba(16, 24, 40, .16);
