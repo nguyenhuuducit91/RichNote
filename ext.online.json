@@ -5,7 +5,7 @@
   "area": "editor-editor",
   "note_type": "rich-text",
   "file_type": "html",
-  "version": "1.1.14",
+  "version": "1.2.0",
   "description": "A beautiful, fast WYSIWYG rich-text editor for Standard Notes — live formatting, a Word-like toolbar, headings H1–H6, text & highlight colors, tables (resize, cell selection & fill), line numbers, current-line highlight, Sublime-style multiple cursors, Find & Replace (Ctrl+F), a minimap, keyboard shortcuts and Word Wrap. Light theme. Hosted build — loads directly from GitHub Pages, no download/zip required.",
   "url": "https://nguyenhuuducit91.github.io/RichNote/index.html",
   "latest_url": "https://nguyenhuuducit91.github.io/RichNote/ext.online.json",

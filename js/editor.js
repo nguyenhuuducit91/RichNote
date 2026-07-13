@@ -85,14 +85,14 @@
   var REPEATABLE = {
     bold: 1, italic: 1, underline: 1, strike: 1, sub: 1, super: 1, code: 1,
     h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, p: 1, quote: 1,
-    left: 1, center: 1, right: 1, justify: 1, ul: 1, ol: 1, indent: 1, outdent: 1, clear: 1
+    left: 1, center: 1, right: 1, justify: 1, ul: 1, ol: 1, checklist: 1, indent: 1, outdent: 1, clear: 1
   };
 
   /* ---------- Utilities ---------- */
   function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
-  var BLOCK_RE = /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|UL|OL|PRE|LI|TABLE)$/;
+  var BLOCK_RE = /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|UL|OL|PRE|LI|TABLE|HR)$/;
   // Wrap top-level text/inline nodes into blocks so every line is a block
   function normalizeBlocks() {
     var nodes = Array.prototype.slice.call(editor.childNodes);
@@ -176,10 +176,11 @@
     if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
     editor.focus();
     if (lines.length === 1) {
-      document.execCommand('insertText', false, lines[0]);
+      if (textHasUrl(lines[0])) document.execCommand('insertHTML', false, escapeAndLinkify(lines[0]));
+      else document.execCommand('insertText', false, lines[0]);
     } else {
       var html = lines.map(function (l) {
-        return '<p>' + (l ? escapeHtml(l) : '<br>') + '</p>';
+        return '<p>' + (l ? escapeAndLinkify(l) : '<br>') + '</p>';
       }).join('');
       document.execCommand('insertHTML', false, html);
       stripSpuriousBg();
@@ -199,7 +200,7 @@
     insertLines(text.replace(/\r\n?/g, '\n').replace(/\n{2,}/g, '\n').split('\n'));
   }
   /* ---------- Formatted paste (keep bold/colors/links) with sanitising ---------- */
-  var PASTE_TAGS = { P:1, DIV:1, BR:1, SPAN:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, DEL:1,
+  var PASTE_TAGS = { P:1, DIV:1, BR:1, HR:1, SPAN:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, DEL:1,
     MARK:1, CODE:1, PRE:1, A:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1, FONT:1, SUB:1, SUP:1,
     TABLE:1, THEAD:1, TBODY:1, TFOOT:1, TR:1, TD:1, TH:1, CAPTION:1, COLGROUP:1, COL:1 };
   var STYLE_KEEP = ['color', 'background-color', 'font-weight', 'font-style',
@@ -245,6 +246,10 @@
         } else if (name === 'style') {
           var s = filterStyle(el);
           if (s) el.setAttribute('style', s); else el.removeAttribute('style');
+        } else if (name === 'class' && el.tagName === 'UL' && /\brn-checklist\b/.test(attrs[k].value)) {
+          el.setAttribute('class', 'rn-checklist');            // keep checklist lists intact on paste
+        } else if (name === 'data-checked' && el.tagName === 'LI') {
+          /* keep a checklist item's checked state */
         } else {
           el.removeAttribute(attrs[k].name);
         }
@@ -485,7 +490,9 @@
       col = pre.toString().length + 1;
     }
     stPos.innerHTML = 'Ln : ' + ln + '&nbsp;&nbsp;Col : ' + col;
-    stLen.innerHTML = 'length : ' + editor.textContent.length +
+    var txt = editor.textContent;
+    var words = (txt.match(/\S+/g) || []).length;
+    stLen.innerHTML = 'words : ' + words + '&nbsp;&nbsp;length : ' + txt.length +
                       '&nbsp;&nbsp;lines : ' + Math.max(1, count);
     var selLen = (sel && sel.rangeCount) ? sel.toString().length : 0;
     stSel.textContent = selLen > 0 ? ('Sel : ' + selLen) : '';
@@ -521,7 +528,7 @@
   }
   function setActive(cmd, on) {
     var btn = toolbar.querySelector('.tbtn[data-cmd="' + cmd + '"]');
-    if (btn) btn.classList.toggle('active', !!on);
+    if (btn) { btn.classList.toggle('active', !!on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   }
   function setEnabled(cmd, on) {
     var els = document.querySelectorAll('.tbtn[data-cmd="' + cmd + '"], .menu-item[data-cmd="' + cmd + '"]');
@@ -565,11 +572,12 @@
   }
   function updateLists() {
     if (!listBtn) return;
-    var ul = q('insertUnorderedList'), ol = q('insertOrderedList');
+    var ul = q('insertUnorderedList'), ol = q('insertOrderedList'), chk = inChecklist();
     if (listCur) listCur.innerHTML = ol ? LIST_ICONS.ol : LIST_ICONS.ul;   // reflect active list; bullet as neutral default
-    listBtn.classList.toggle('active', ul || ol);
-    setOpt(listPop, 'ul', ul);
+    listBtn.classList.toggle('active', ul || ol || chk);
+    setOpt(listPop, 'ul', ul && !chk);   // a checklist is a <ul>; don't light both up
     setOpt(listPop, 'ol', ol);
+    setOpt(listPop, 'checklist', chk);
   }
   function updateFmtExtra() {
     if (!fmtBtn) return;
@@ -659,6 +667,7 @@
     var topCur = currentBlock();
     updateTableTool(topCur);
     if (cellSel.length && !dragging && topCur !== cellSelTable) clearCellSel();
+    updateEmptyState();
   }
 
   function onChange() { refresh(); save(); }
@@ -762,24 +771,46 @@
   }
 
   /* ---------- About / Donate dialog ---------- */
+  // Keep keyboard focus inside an open modal (Tab / Shift+Tab cycle its controls).
+  function modalFocusables(modal) {
+    return Array.prototype.slice.call(
+      modal.querySelectorAll('a[href],button:not([disabled]),input,[tabindex]:not([tabindex="-1"])')
+    ).filter(function (el) { return el.offsetParent !== null; });
+  }
+  function trapModalTab(modal) {
+    modal.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Tab' || !modal.classList.contains('open')) return;
+      var f = modalFocusables(modal);
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+    });
+  }
   function openAbout() {
     closeMenus();
     aboutModal.classList.add('open');
     aboutModal.setAttribute('aria-hidden', 'false');
+    setTimeout(function () { if (aboutClose) aboutClose.focus(); }, 0);
   }
   function closeAbout() {
     aboutModal.classList.remove('open');
     aboutModal.setAttribute('aria-hidden', 'true');
+    editor.focus();
   }
   function openShortcuts() {
     closeMenus();
     scModal.classList.add('open');
     scModal.setAttribute('aria-hidden', 'false');
+    setTimeout(function () { if (scClose) scClose.focus(); }, 0);
   }
   function closeShortcuts() {
     scModal.classList.remove('open');
     scModal.setAttribute('aria-hidden', 'true');
+    editor.focus();
   }
+  trapModalTab(aboutModal);
+  if (scModal) trapModalTab(scModal);
 
   // Font size in px: use the <font size=7> trick, then swap to inline style (on the current selection)
   function applyFontSize(px) {
@@ -1506,6 +1537,8 @@
       case 'quote':     applyBlockFormat('BLOCKQUOTE'); break;
       case 'ul':        document.execCommand('insertUnorderedList'); liftLists(); break;
       case 'ol':        document.execCommand('insertOrderedList');   liftLists(); break;
+      case 'checklist': toggleChecklist(); return;
+      case 'hr':        insertHR(); return;
       case 'left':      document.execCommand('justifyLeft'); break;
       case 'center':    document.execCommand('justifyCenter'); break;
       case 'right':     document.execCommand('justifyRight'); break;
@@ -1834,7 +1867,9 @@
       link: s('<path d="M6.7 9.3 9.3 6.7"/><path d="M8.4 4.6l1-1a2.7 2.7 0 0 1 3.9 3.9l-1 1"/><path d="M7.6 11.4l-1 1a2.7 2.7 0 0 1-3.9-3.9l1-1"/>'),
       ul: s('<circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/>'),
       ol: s('<path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text>'),
+      checklist: s('<rect x="2" y="2.6" width="5" height="5" rx="1"/><path d="M3 5l1.2 1.2L6.4 4"/><path d="M9.5 4.6h5"/><path d="M2 11.4h5M9.5 11.4h5"/>'),
       table: s('<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.7h12M6.4 3v10M10 3v10"/>'),
+      hr: s('<path d="M2 8h12"/><path d="M3.4 4.4h9.2M3.4 11.6h9.2" opacity=".45"/>'),
       wrap: s('<path d="M2 4h12M2 8h8.4a2.4 2.4 0 0 1 0 4.8H7.4"/><path d="M9.2 10.8 7.4 12.8l1.8 2"/>'),
       minimap: s('<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M10.2 3.5v9" opacity=".55"/><path d="M4.6 5.6h3.4M4.6 8h4.2M4.6 10.4h2.6" stroke-width="1"/>'),
       shortcuts: s('<rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 6.5h0M6 6.5h0M8 6.5h0M10 6.5h0M12 6.5h0M4 9h0M12 9h0M6 9.4h4" stroke-linecap="round"/>'),
@@ -1933,6 +1968,26 @@
     // F4: repeat the last formatting action (like Google Sheets)
     if (ev.key === 'F4') { ev.preventDefault(); if (lastAction) lastAction(); return; }
 
+    // Auto-format: a Markdown marker + Space at the line start → heading / list / quote / checklist
+    if (ev.key === ' ' && !mod && !ev.altKey && !ev.shiftKey) {
+      if (maybeMarkdownBlock()) { ev.preventDefault(); return; }
+      linkifyBeforeCaret();               // a bare URL just typed → link it (the space still types)
+      return;
+    }
+    // Enter on a "---" / "***" / "___" line → horizontal rule; else auto-link a URL just typed
+    if (ev.key === 'Enter' && !ev.shiftKey && !mod && !ev.altKey) {
+      if (maybeHorizontalRule()) { ev.preventDefault(); return; }
+      linkifyBeforeCaret();
+      return;
+    }
+    // Alt+Up / Alt+Down — move the current line(s) up / down (VS Code style)
+    if (ev.altKey && !ev.shiftKey && !mod && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) {
+      if (mcActive()) return;
+      ev.preventDefault();
+      moveLine(ev.key === 'ArrowUp' ? -1 : 1);
+      return;
+    }
+
     // Shift+Enter -> create a NEW block (new line), not a soft line break
     if (ev.key === 'Enter' && ev.shiftKey && !mod) {
       ev.preventDefault();
@@ -1995,6 +2050,8 @@
       else if (c === 'KeyP') exec('formatPainter');   // Ctrl+Shift+P  copy formatting
       else if (c === 'Period') changeFontSize(1);     // Ctrl+Shift+.  increase font size
       else if (c === 'Comma') changeFontSize(-1);     // Ctrl+Shift+,  decrease font size
+      else if (c === 'KeyD') duplicateLine();         // Ctrl+Shift+D  duplicate line
+      else if (c === 'KeyK') deleteLine();            // Ctrl+Shift+K  delete line
       else if (c === 'KeyZ') { document.execCommand('redo'); onChange(); }
       else handled = false;
     } else {
@@ -2004,6 +2061,7 @@
       else if (c === 'KeyJ') exec('justify');
       else if (c === 'Equal') exec('sub');            // Ctrl+=  subscript
       else if (c === 'KeyK') exec('link');
+      else if (c === 'KeyH') exec('findReplace');     // Ctrl+H  Find & Replace
       else if (c === 'Backslash') exec('clear');
       else if (c === 'KeyY') { document.execCommand('redo'); onChange(); }
       // With a multi-cell or discontiguous (Ctrl+drag) selection, route Ctrl+B/I/U through
@@ -2015,6 +2073,258 @@
     }
     if (handled) ev.preventDefault();
   });
+
+  /* ============================================================
+     EMPTY-STATE PLACEHOLDER
+     ============================================================ */
+  function isEditorEmpty() {
+    if (editor.querySelector('img,table,hr,li')) return false;
+    if (editor.children.length > 1) return false;
+    return !/\S/.test(editor.textContent);
+  }
+  function updateEmptyState() { editor.classList.toggle('is-empty', isEditorEmpty()); }
+
+  /* ============================================================
+     SAVE-STATE INDICATOR (status bar)
+     ============================================================ */
+  var stSave = document.getElementById('st-save');
+  var saveStateTimer = null;
+  function setSaveState(saving) {
+    if (!stSave) return;
+    stSave.textContent = saving ? 'Saving…' : 'Saved';
+    stSave.classList.toggle('saving', !!saving);
+    stSave.classList.toggle('saved', !saving);
+  }
+
+  /* ============================================================
+     AUTO-LINKIFY  (paste + type-then-space)
+     ============================================================ */
+  var URL_RE = /\b(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+)/gi;
+  function trimTrailingPunct(u) {                 // don't swallow trailing . , ) ] etc.
+    var m = /[.,;:!?)\]}"'»]+$/.exec(u);
+    return m ? u.slice(0, u.length - m[0].length) : u;
+  }
+  function textHasUrl(text) { URL_RE.lastIndex = 0; return URL_RE.test(text); }
+  // Escape a plain-text line to HTML, turning bare URLs into <a> links.
+  function escapeAndLinkify(text) {
+    var out = '', last = 0, m;
+    URL_RE.lastIndex = 0;
+    while ((m = URL_RE.exec(text))) {
+      var raw = trimTrailingPunct(m[0]);
+      var start = m.index;
+      out += escapeHtml(text.slice(last, start));
+      var href = /^www\./i.test(raw) ? 'https://' + raw : raw;
+      out += '<a href="' + escapeHtml(href) + '">' + escapeHtml(raw) + '</a>';
+      last = start + raw.length;
+      URL_RE.lastIndex = last;
+    }
+    out += escapeHtml(text.slice(last));
+    return out;
+  }
+  // Turn the URL token that ends right at the caret into a link (called on Space/Enter).
+  function linkifyBeforeCaret() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return false;
+    var r = sel.getRangeAt(0);
+    if (!r.collapsed) return false;
+    var node = r.startContainer;
+    if (node.nodeType !== 3 || closestTag(node, 'A')) return false;
+    var offset = r.startOffset;
+    var tok = /(\S+)$/.exec(node.nodeValue.slice(0, offset));
+    if (!tok) return false;
+    var token = tok[1];
+    URL_RE.lastIndex = 0;
+    var um = URL_RE.exec(token);
+    if (!um || um.index !== 0) return false;
+    var raw = trimTrailingPunct(token);
+    if (raw.length < 6) return false;
+    var startPos = offset - token.length;
+    var wrap = document.createRange();
+    wrap.setStart(node, startPos);
+    wrap.setEnd(node, startPos + raw.length);
+    sel.removeAllRanges(); sel.addRange(wrap);
+    var href = /^www\./i.test(raw) ? 'https://' + raw : raw;
+    document.execCommand('insertHTML', false, '<a href="' + escapeHtml(href) + '">' + escapeHtml(raw) + '</a>');
+    return true;
+  }
+
+  /* ============================================================
+     CARET HELPERS + LINE OPERATIONS (VS Code style)
+     ============================================================ */
+  function placeCaret(el, atEnd) {
+    if (!el) return;
+    var r = document.createRange();
+    r.selectNodeContents(el); r.collapse(!atEnd);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    editor.focus();
+  }
+  function placeCaretAtEnd(el) { placeCaret(el, true); }
+
+  // The top-level blocks the operation targets (the selection's span, else the caret line).
+  function opBlocks() {
+    var blocks = selectedBlocks();
+    if (!blocks.length) { var c = currentBlock(); if (c) blocks = [c]; }
+    return blocks;
+  }
+  function duplicateLine() {
+    var blocks = opBlocks();
+    if (!blocks.length) return;
+    var last = blocks[blocks.length - 1], ref = last.nextSibling, clones = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var cl = blocks[i].cloneNode(true);
+      if (cl.classList) cl.classList.remove('current-line');
+      clones.push(cl);
+    }
+    for (var j = 0; j < clones.length; j++) last.parentNode.insertBefore(clones[j], ref);
+    placeCaretAtEnd(clones[clones.length - 1]);
+    onChange();
+  }
+  function moveLine(dir) {
+    var blocks = opBlocks();
+    if (!blocks.length) return;
+    var first = blocks[0], last = blocks[blocks.length - 1];
+    if (dir < 0) {
+      var prev = first.previousElementSibling;
+      if (!prev) return;
+      last.parentNode.insertBefore(prev, last.nextSibling);   // slide the block above down past us
+    } else {
+      var next = last.nextElementSibling;
+      if (!next) return;
+      first.parentNode.insertBefore(next, first);             // slide the block below up past us
+    }
+    onChange();
+  }
+  function deleteLine() {
+    var blocks = opBlocks();
+    if (!blocks.length) return;
+    var focus = blocks[blocks.length - 1].nextElementSibling || blocks[0].previousElementSibling;
+    for (var i = 0; i < blocks.length; i++) blocks[i].parentNode.removeChild(blocks[i]);
+    ensureContent();
+    placeCaret(focus || editor.firstElementChild, false);
+    onChange();
+  }
+
+  /* ============================================================
+     HORIZONTAL RULE
+     ============================================================ */
+  function insertHR() {
+    editor.focus();
+    var block = currentBlock();
+    var hr = document.createElement('hr');
+    if (block && isBlockEmpty(block)) editor.replaceChild(hr, block);
+    else if (block) block.parentNode.insertBefore(hr, block.nextSibling);
+    else editor.appendChild(hr);
+    var p = hr.nextElementSibling;
+    if (!p || p.tagName === 'HR' || p.tagName === 'TABLE') {
+      p = document.createElement('p'); p.appendChild(document.createElement('br'));
+      hr.parentNode.insertBefore(p, hr.nextSibling);
+    }
+    placeCaret(p, false);
+    ensureContent(); onChange();
+  }
+  // Enter on a line that is only "---" / "***" / "___" → a horizontal rule (Markdown-style).
+  function maybeHorizontalRule() {
+    var block = currentBlock();
+    if (!block || currentListItem() || block.tagName === 'TABLE') return false;
+    if (!/^(-{3,}|\*{3,}|_{3,})$/.test(block.textContent.trim())) return false;
+    var hr = document.createElement('hr');
+    editor.replaceChild(hr, block);
+    var p = document.createElement('p'); p.appendChild(document.createElement('br'));
+    hr.parentNode.insertBefore(p, hr.nextSibling);
+    placeCaret(p, false);
+    onChange();
+    return true;
+  }
+
+  /* ============================================================
+     CHECKLIST (task list)
+     ============================================================ */
+  function inChecklist() {
+    var li = currentListItem();
+    return !!(li && li.parentNode && li.parentNode.classList && li.parentNode.classList.contains('rn-checklist'));
+  }
+  function makeChecklist(checked) {
+    var block = currentBlock();
+    if (!block || block.tagName === 'TABLE' || block.tagName === 'HR') return;
+    var ul = document.createElement('ul');
+    ul.className = 'rn-checklist';
+    var li = document.createElement('li');
+    if (checked) li.setAttribute('data-checked', '');
+    while (block.firstChild) li.appendChild(block.firstChild);
+    if (!li.firstChild) li.appendChild(document.createElement('br'));
+    ul.appendChild(li);
+    block.parentNode.replaceChild(ul, block);
+    placeCaretAtEnd(li);
+    onChange();
+  }
+  function toggleChecklist() {
+    editor.focus();
+    if (inChecklist()) {                                     // checklist → back to paragraphs
+      var ul = currentListItem().parentNode, made = [];
+      Array.prototype.forEach.call(ul.children, function (item) {
+        if (item.tagName !== 'LI') return;
+        var p = document.createElement('p');
+        while (item.firstChild) p.appendChild(item.firstChild);
+        if (!p.firstChild) p.appendChild(document.createElement('br'));
+        made.push(p);
+      });
+      for (var i = 0; i < made.length; i++) ul.parentNode.insertBefore(made[i], ul);
+      ul.parentNode.removeChild(ul);
+      placeCaretAtEnd(made[0] || null);
+      ensureContent(); onChange();
+      return;
+    }
+    makeChecklist(false);
+  }
+  // Click on a checklist item's checkbox (its left gutter) toggles the done state.
+  editor.addEventListener('click', function (ev) {
+    var li = ev.target.closest ? ev.target.closest('li') : null;
+    if (!li || !editor.contains(li)) return;
+    var ul = li.parentNode;
+    if (!ul.classList || !ul.classList.contains('rn-checklist')) return;
+    var r = li.getBoundingClientRect();
+    if (ev.clientX - r.left <= 24) {                        // inside the checkbox gutter
+      ev.preventDefault();
+      li.toggleAttribute('data-checked');
+      onChange();
+    }
+  });
+
+  /* ============================================================
+     MARKDOWN AUTO-FORMAT  (typed marker + Space at line start)
+     ============================================================ */
+  var MD_HEADING = /^#{1,6}$/;
+  function maybeMarkdownBlock() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return false;
+    var block = currentBlock();
+    if (!block || currentListItem()) return false;          // don't fire inside a list
+    if (block.tagName === 'TABLE' || block.tagName === 'HR') return false;
+    var r = sel.getRangeAt(0);
+    var pre = document.createRange();
+    pre.selectNodeContents(block);
+    try { pre.setEnd(r.startContainer, r.startOffset); } catch (e) { return false; }
+    var before = pre.toString();
+    var apply = null;
+    if (MD_HEADING.test(before)) { var lvl = before.length; apply = function () { applyBlockFormat('H' + lvl); }; }
+    else if (before === '-' || before === '*') apply = function () { exec('ul'); };
+    else if (before === '1.') apply = function () { exec('ol'); };
+    else if (before === '>') apply = function () { applyBlockFormat('BLOCKQUOTE'); };
+    else if (before === '[]' || before === '[ ]') apply = function () { makeChecklist(false); };
+    else if (before === '[x]' || before === '[X]') apply = function () { makeChecklist(true); };
+    else return false;
+    var del = document.createRange();                       // remove the leading marker text
+    del.setStart(block, 0);
+    del.setEnd(r.startContainer, r.startOffset);
+    del.deleteContents();
+    block.normalize();
+    var cr = document.createRange();
+    cr.selectNodeContents(block); cr.collapse(true);
+    sel.removeAllRanges(); sel.addRange(cr);
+    apply();
+    onChange();
+    return true;
+  }
 
   /* ---------- Standard Notes integration ---------- */
   function loadContent(html, title) {
@@ -2031,12 +2341,16 @@
     ensureContent();
     lastSavedHTML = editor.innerHTML;
     if (title) stName.textContent = title;
+    setSaveState(false);
     refresh();
   }
   function save() {
     if (!componentRelay || !workingNote) return;
     var html = editor.innerHTML;
     lastSavedHTML = html;
+    setSaveState(true);
+    if (saveStateTimer) clearTimeout(saveStateTimer);
+    saveStateTimer = setTimeout(function () { setSaveState(false); }, 700);
     componentRelay.saveItemWithPresave(workingNote, function () {
       workingNote.content.text = html;
     });

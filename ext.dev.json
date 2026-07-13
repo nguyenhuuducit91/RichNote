@@ -5,7 +5,7 @@
   "area": "editor-editor",
   "note_type": "rich-text",
   "file_type": "html",
-  "version": "1.1.14",
+  "version": "1.2.0",
   "description": "DEV build of RichNote — loads the editor from your local dev server (http://localhost:8080). Use with the Standard Notes DESKTOP app (the web app blocks http://). Run `npm start` first, then import this manifest.",
   "url": "http://localhost:8080/index.html",
   "latest_url": "http://localhost:8080/ext.dev.json",

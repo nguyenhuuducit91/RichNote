@@ -9,7 +9,7 @@
 <body>
   <div id="app" class="app">
     <!-- Menu bar -->
-    <div class="menubar" id="menubar">
+    <div class="menubar" id="menubar" role="menubar" aria-label="Menu">
       <div class="menu-tools">
         <button class="tbtn" data-cmd="undo" title="Undo (Ctrl+Z)">
           <svg class="ico" viewBox="0 0 16 16"><path d="M4 7h6a3.5 3.5 0 1 1 0 7H6"/><path d="M6.5 4.5 4 7l2.5 2.5"/></svg>
@@ -78,8 +78,10 @@
           <button class="menu-item" type="button" data-cmd="link"><span class="menu-check"></span><span class="menu-label">Link…</span><span class="menu-key">Ctrl+K</span></button>
           <button class="menu-item" type="button" data-cmd="ul"><span class="menu-check"></span><span class="menu-label">Bulleted list</span><span class="menu-key">Ctrl+Shift+8</span></button>
           <button class="menu-item" type="button" data-cmd="ol"><span class="menu-check"></span><span class="menu-label">Numbered list</span><span class="menu-key">Ctrl+Shift+7</span></button>
+          <button class="menu-item" type="button" data-cmd="checklist"><span class="menu-check"></span><span class="menu-label">Checklist</span><span class="menu-key">[ ]&nbsp;␣</span></button>
           <div class="menu-sep"></div>
           <button class="menu-item" type="button" data-cmd="table"><span class="menu-check"></span><span class="menu-label">Table (3×3)</span><span class="menu-key"></span></button>
+          <button class="menu-item" type="button" data-cmd="hr"><span class="menu-check"></span><span class="menu-label">Horizontal rule</span><span class="menu-key">---&nbsp;⏎</span></button>
         </div>
       </div>
 
@@ -103,7 +105,7 @@
     </div>
 
     <!-- Formatting toolbar -->
-    <div class="toolbar" id="toolbar">
+    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Formatting">
 
       <div class="tgroup">
         <select class="tsel tsel-style" id="styleSelect" title="Paragraph style">
@@ -229,6 +231,9 @@
             <button class="tdrop-opt" type="button" data-cmd="ol" title="Numbered list (Ctrl+Shift+7)">
               <svg class="ico" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text></svg>
             </button>
+            <button class="tdrop-opt" type="button" data-cmd="checklist" title="Checklist ( [ ] then space )">
+              <svg class="ico" viewBox="0 0 16 16"><rect x="2" y="2.6" width="5" height="5" rx="1"/><path d="M3 5l1.2 1.2L6.4 4"/><path d="M9.5 4.6h5"/><path d="M2 11.4h5M9.5 11.4h5"/></svg>
+            </button>
           </div>
         </div>
         <div class="tdrop">
@@ -286,16 +291,19 @@
     <!-- Editor: line-number gutter + WYSIWYG area -->
     <div class="editor-area">
       <div class="gutter" id="gutter" aria-hidden="true"><div class="gutter-inner" id="gutterInner"></div></div>
-      <div id="editor" class="doc" contenteditable="true" spellcheck="false"></div>
+      <div id="editor" class="doc" contenteditable="true" spellcheck="false"
+           role="textbox" aria-multiline="true" aria-label="Note content"
+           data-placeholder="Start writing…"></div>
     </div>
 
     <!-- Status bar -->
     <div class="statusbar">
       <span class="st-item st-name" id="st-name">Note</span>
+      <span class="st-item st-save saved" id="st-save">Saved</span>
       <span class="st-spacer"></span>
       <span class="st-item" id="st-pos">Ln : 1&nbsp;&nbsp;Col : 1</span>
       <span class="st-item" id="st-sel"></span>
-      <span class="st-item" id="st-len">length : 0&nbsp;&nbsp;lines : 1</span>
+      <span class="st-item" id="st-len">words : 0&nbsp;&nbsp;length : 0&nbsp;&nbsp;lines : 1</span>
       <span class="st-item st-mode">RTF</span>
     </div>
   </div>
@@ -308,16 +316,18 @@
       <div class="about-hero">
         <div class="about-logo"><img src="img/icon.svg" alt="RichNote" /></div>
         <h2 class="about-title">Rich Note</h2>
-        <span class="about-ver" id="aboutVer">v1.1.14</span>
+        <span class="about-ver" id="aboutVer">v1.2.0</span>
         <p class="about-tagline">A beautiful WYSIWYG editor for Standard Notes</p>
       </div>
 
       <div class="about-body">
         <div class="about-chips">
           <span class="about-chip">WYSIWYG</span>
+          <span class="about-chip">Markdown</span>
+          <span class="about-chip">Checklists</span>
           <span class="about-chip">Multiple cursors</span>
           <span class="about-chip">Minimap</span>
-          <span class="about-chip">Find</span>
+          <span class="about-chip">Find &amp; Replace</span>
           <span class="about-chip">Word Wrap</span>
         </div>
 
@@ -380,7 +390,10 @@
             <div class="sc-row"><span class="sc-act">Undo / Redo</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Y</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Cut / Copy / Paste</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>X</kbd> / <kbd>C</kbd> / <kbd>V</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Select all</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>A</kbd></span></div>
-            <div class="sc-row"><span class="sc-act">Find</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>F</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Find / Find &amp; Replace</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>H</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Duplicate line</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>D</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Move line up / down</span><span class="sc-keys"><kbd>Alt</kbd><kbd>↑</kbd> / <kbd>↓</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Delete line</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>K</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Repeat last format</span><span class="sc-keys"><kbd>F4</kbd></span></div>
             <div class="sc-row"><span class="sc-act">New line (block)</span><span class="sc-keys"><kbd>Shift</kbd><kbd>Enter</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Indent / Outdent</span><span class="sc-keys"><kbd>Tab</kbd> / <kbd>Shift</kbd><kbd>Tab</kbd></span></div>
@@ -399,6 +412,16 @@
             <div class="sc-row"><span class="sc-act">Insert link</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>K</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Clear formatting</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>\</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Font size + / −</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>.</kbd> / <kbd>,</kbd></span></div>
+          </div>
+
+          <div class="sc-group">
+            <h3 class="sc-h3">Markdown &amp; insert</h3>
+            <div class="sc-row"><span class="sc-act">Heading 1–6</span><span class="sc-keys"><kbd>#</kbd>…<kbd>######</kbd> <kbd>␣</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Bulleted / Numbered list</span><span class="sc-keys"><kbd>-</kbd> / <kbd>1.</kbd> <kbd>␣</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Quote</span><span class="sc-keys"><kbd>&gt;</kbd> <kbd>␣</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Checklist</span><span class="sc-keys"><kbd>[ ]</kbd> <kbd>␣</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Horizontal rule</span><span class="sc-keys"><kbd>---</kbd> <kbd>Enter</kbd></span></div>
+            <div class="sc-row"><span class="sc-act">Auto-link a URL</span><span class="sc-keys">type + <kbd>␣</kbd></span></div>
           </div>
 
           <div class="sc-group">
