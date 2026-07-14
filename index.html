@@ -61,6 +61,7 @@
           <button class="menu-item" type="button" data-cmd="h6"><span class="menu-check"></span><span class="menu-label">Heading 6</span><span class="menu-key">Ctrl+Alt+6</span></button>
           <button class="menu-item" type="button" data-cmd="p"><span class="menu-check"></span><span class="menu-label">Normal text</span><span class="menu-key">Ctrl+Alt+0</span></button>
           <button class="menu-item" type="button" data-cmd="quote"><span class="menu-check"></span><span class="menu-label">Quote</span><span class="menu-key"></span></button>
+          <button class="menu-item" type="button" data-cmd="codeblock"><span class="menu-check"></span><span class="menu-label">Code block</span><span class="menu-key"></span></button>
           <div class="menu-sep"></div>
           <button class="menu-item" type="button" data-cmd="left"><span class="menu-check"></span><span class="menu-label">Align left</span><span class="menu-key">Ctrl+L</span></button>
           <button class="menu-item" type="button" data-cmd="center"><span class="menu-check"></span><span class="menu-label">Align center</span><span class="menu-key">Ctrl+E</span></button>
@@ -117,6 +118,7 @@
           <option value="H5">Heading 5</option>
           <option value="H6">Heading 6</option>
           <option value="BLOCKQUOTE">Quote</option>
+          <option value="CODE">Code block</option>
         </select>
         <select class="tsel" id="fontSelect" title="Font">
           <option value="" disabled>Font</option>
@@ -153,7 +155,6 @@
             <button class="tdrop-opt" type="button" data-cmd="strike"      title="Strikethrough (Ctrl+Shift+X)"><s>S</s></button>
             <button class="tdrop-opt tbtn-supsub" type="button" data-cmd="sub"   title="Subscript (Ctrl+=)">X<sub>2</sub></button>
             <button class="tdrop-opt tbtn-supsub" type="button" data-cmd="super" title="Superscript (Ctrl+Shift+=)">X<sup>2</sup></button>
-            <button class="tdrop-opt" type="button" data-cmd="code"        title="Code (Ctrl+Shift+C)">&lt;/&gt;</button>
           </div>
         </div>
       </div>
@@ -294,6 +295,14 @@
       <div id="editor" class="doc" contenteditable="true" spellcheck="false"
            role="textbox" aria-multiline="true" aria-label="Note content"
            data-placeholder="Start writing…"></div>
+      <!-- Code-block toolbar: language picker + copy, revealed on hover over a code block -->
+      <div class="code-bar" id="codeBar" aria-hidden="true">
+        <select class="code-lang" id="codeLang" title="Code language"></select>
+        <button type="button" class="code-copy" id="codeCopy" title="Copy code">
+          <svg class="ico" viewBox="0 0 16 16" width="13" height="13"><rect x="5" y="5" width="8" height="8" rx="1.4"/><path d="M11 3H4a1 1 0 0 0-1 1v7"/></svg>
+          <span class="code-copy-label">Copy</span>
+        </button>
+      </div>
     </div>
 
     <!-- Status bar -->
@@ -403,7 +412,6 @@
             <h3 class="sc-h3">Format</h3>
             <div class="sc-row"><span class="sc-act">Bold / Italic / Underline</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Strikethrough</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>X</kbd></span></div>
-            <div class="sc-row"><span class="sc-act">Inline code</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Subscript / Superscript</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>=</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>=</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Heading 1–6</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>1</kbd>…<kbd>6</kbd></span></div>
             <div class="sc-row"><span class="sc-act">Normal text</span><span class="sc-keys"><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>0</kbd></span></div>
@@ -441,6 +449,7 @@
   </div>
 
   <script src="vendor/component-relay.js"></script>
+  <script src="vendor/highlight.min.js"></script>
   <script src="js/editor.js"></script>
   <script src="js/multicursor.js"></script>
   <script src="js/minimap.js"></script>
