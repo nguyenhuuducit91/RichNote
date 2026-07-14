@@ -23,13 +23,18 @@ A fast, beautiful **WYSIWYG editor** for [Standard Notes](https://standardnotes.
 
 - 🪄 **True WYSIWYG** — bold looks bold, links look like links. No raw `**markdown**`.
 - 🧰 **Word‑like toolbar** — style dropdown (Normal / **H1–H6** / Quote), font, size, **B / I / U / S**, inline code, and more, all on **one clean line**.
+- ⚡ **Markdown auto‑format** — type `# `, `- `, `1. `, `> `, `[] ` then space, or `---` then Enter, and the line becomes a heading / list / quote / **checklist** / divider instantly.
+- ☑️ **Checklists** — tick‑off task lists; click the box to mark done.
+- 🧮 **Line tools** — duplicate (`Ctrl+Shift+D`), move (`Alt+↑/↓`) and delete (`Ctrl+Shift+K`) lines like VS Code.
+- 🔗 **Auto‑link URLs** — paste or type a link and it turns clickable automatically.
 - 🎨 **Text & highlight colors** — a **Google‑Sheets‑style palette** plus any custom color.
 - 🔢 **Line numbers + current‑line highlight** — a code‑editor feel for your notes.
 - 🗺️ **Minimap** — a VS Code‑style overview on the right; click or drag to jump anywhere. Toggle in **View → Minimap**.
 - ⌨️ **Keyboard shortcuts everyone knows** — `Ctrl+B/I/U`, `Ctrl+Alt+1…6` for headings, `Ctrl+L/E/R` to align, `Ctrl+K` for links, `F4` to repeat the last action.
 - 🔗 **Smart links** — insert/edit with a popup; **Ctrl/Cmd‑click** to open.
 - 🧬 **Multiple cursors (Sublime‑style)** — `Shift+Alt+↑/↓` to add a caret above/below, **Alt‑click** to drop one anywhere, then type / delete / arrow‑select on every line at once.
-- 🔍 **Find (`Ctrl+F`)** — jump between matches and **“Select all”** (`Alt+Enter`) to turn every match into a caret and edit them together.
+- 🔍 **Find & Replace (`Ctrl+F` / `Ctrl+H`)** — jump between matches with **Match case / Whole word / Regex** options, and **“Select all”** (`Alt+Enter`) to turn every match into a caret and edit them together.
+- 📊 **Live status bar** — word / character / line counts plus a **Saved / Saving…** indicator.
 - ↹ **Tab indentation** (single line or a whole block) and a **Word Wrap** toggle.
 - 🌗 **Clean light theme**, thoughtfully designed and responsive.
 - 🔒 **Private by design** — 100% local, static HTML/CSS/JS. No trackers, no network calls, no build step.
@@ -88,7 +93,10 @@ New notes will now use RichNote out of the box. Existing notes keep their curren
 | `Ctrl+Alt+0` | Normal text | `Ctrl+L / E / R` | Align left / center / right |
 | `Ctrl+Shift+8 / 7` | Bulleted / Numbered list | `Ctrl+K` | Insert link |
 | `Tab` / `Shift+Tab` | Indent / Outdent | `Ctrl+\` | Clear formatting |
-| `Enter` / `Shift+Enter` | New line (new block) | `F4` | **Repeat last format** |
+| `Ctrl+H` | Find & Replace | `F4` | **Repeat last format** |
+| `Ctrl+Shift+D` | Duplicate line | `Ctrl+Shift+K` | Delete line |
+| `Alt+↑ / ↓` | Move line up / down | `--- ⏎` | Horizontal rule |
+| `Enter` / `Shift+Enter` | New line (new block) | `[ ] ␣` | Checklist |
 | `Shift+Alt+↑ / ↓` | Add cursor above / below | `Alt+Click` | Add / remove a cursor |
 | `Ctrl+F` | Find | `Alt+Enter` | Select all matches (multi‑cursor) |
 | `↑ ↓ ← →` (with cursors) | Move every cursor | `Shift+↑↓←→ / Home / End` | Select at every cursor |

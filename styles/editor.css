@@ -702,8 +702,18 @@ a.about-row:hover { background: var(--np-accent-soft); }
   font-size: 13.5px;
 }
 .about-donate-text { margin: 0 0 14px; font-size: 12.5px; color: #7a6a55; }
-.about-qr-row { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
-.about-qr-item { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; }
+/* Two QR items always on ONE horizontal row (never wrap); they shrink to fit narrow screens */
+.about-qr-row { display: flex; justify-content: center; gap: 12px; flex-wrap: nowrap; }
+.about-qr-item {
+  margin: 0;
+  flex: 1 1 0;             /* equal widths, allowed to shrink */
+  min-width: 0;
+  max-width: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
 .about-qr-cap {
   font-size: 11px;
   font-weight: 700;
@@ -712,14 +722,16 @@ a.about-row:hover { background: var(--np-accent-soft); }
   color: #b07a3a;
 }
 .about-qr {
-  height: 148px;           /* fixed height so both QRs match; width follows aspect */
-  width: auto;
-  max-width: 100%;
+  width: 100%;             /* follow the item width so both shrink together, no wrap */
+  height: auto;
+  aspect-ratio: 1 / 1;     /* keep the QR square at any size */
+  max-width: 148px;
   padding: 5px;
   border-radius: 12px;
   border: 1px solid #eee;
   box-shadow: 0 3px 10px rgba(16, 24, 40, .08);
   background: #fff;
+  object-fit: contain;
 }
 .about-foot {
   flex: 0 0 auto;
@@ -934,6 +946,181 @@ a.about-row:hover { background: var(--np-accent-soft); }
   box-shadow: 0 1px 0 color-mix(in srgb, var(--np-fg) 6%, transparent);
   white-space: break-spaces;
 }
+
+/* ---------- Code block (dark IDE panel with per-line numbering) ---------- */
+.doc pre.rn-code {
+  position: relative;
+  margin: 6px 0;
+  padding: 6px 14px;
+  background: #0d1117;
+  color: #e6edf3;
+  font-family: var(--np-mono);
+  font-size: .92em;
+  line-height: var(--np-lh);         /* match normal lines so gutter numbers line up */
+  white-space: inherit;              /* follow the editor's wrap setting */
+  border: 1px solid #2b323c;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .04),
+    0 1px 2px rgba(0, 0, 0, .3),
+    0 16px 34px -24px rgba(0, 0, 0, .7);
+  overflow: visible;
+  caret-color: #58a6ff;
+  tab-size: 4;
+  -moz-tab-size: 4;
+}
+/* A code block keeps its dark panel even when it's the current line */
+.doc > pre.rn-code.current-line { background: #0d1117; }
+/* Text selection inside a code block */
+.doc pre.rn-code ::selection { background: rgba(56, 111, 175, .45); }
+.doc pre.rn-code ::-moz-selection { background: rgba(56, 111, 175, .45); }
+/* The <code> inside a code block is a plain container — not the inline pill */
+.doc pre.rn-code code {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  white-space: inherit;
+  display: block;
+}
+/* highlight.js — GitHub-dark token palette, scoped to the code block */
+.doc pre.rn-code .hljs-comment,
+.doc pre.rn-code .hljs-quote { color: #8b949e; font-style: italic; }
+.doc pre.rn-code .hljs-keyword,
+.doc pre.rn-code .hljs-selector-tag,
+.doc pre.rn-code .hljs-literal,
+.doc pre.rn-code .hljs-doctag,
+.doc pre.rn-code .hljs-name { color: #ff7b72; }
+.doc pre.rn-code .hljs-string,
+.doc pre.rn-code .hljs-regexp,
+.doc pre.rn-code .hljs-meta .hljs-string { color: #a5d6ff; }
+.doc pre.rn-code .hljs-number,
+.doc pre.rn-code .hljs-symbol,
+.doc pre.rn-code .hljs-bullet,
+.doc pre.rn-code .hljs-attr,
+.doc pre.rn-code .hljs-variable,
+.doc pre.rn-code .hljs-template-variable { color: #79c0ff; }
+.doc pre.rn-code .hljs-title,
+.doc pre.rn-code .hljs-title.function_,
+.doc pre.rn-code .hljs-section { color: #d2a8ff; }
+.doc pre.rn-code .hljs-built_in,
+.doc pre.rn-code .hljs-type,
+.doc pre.rn-code .hljs-title.class_,
+.doc pre.rn-code .hljs-class .hljs-title { color: #ffa657; }
+.doc pre.rn-code .hljs-attribute,
+.doc pre.rn-code .hljs-selector-attr,
+.doc pre.rn-code .hljs-selector-class,
+.doc pre.rn-code .hljs-selector-id { color: #7ee787; }
+.doc pre.rn-code .hljs-meta,
+.doc pre.rn-code .hljs-comment .hljs-doctag { color: #8b949e; }
+.doc pre.rn-code .hljs-tag { color: #7ee787; }
+.doc pre.rn-code .hljs-deletion { color: #ffa198; background: #490202; }
+.doc pre.rn-code .hljs-addition { color: #7ee787; background: #0f5323; }
+.doc pre.rn-code .hljs-emphasis { font-style: italic; }
+.doc pre.rn-code .hljs-strong { font-weight: 700; }
+
+/* Language bar + copy button — absolutely placed over the block, revealed on hover */
+.code-bar {
+  position: absolute;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  z-index: 40;
+  padding: 0;
+}
+.code-bar.show { display: inline-flex; animation: rnCodeBarIn .13s ease both; }
+@keyframes rnCodeBarIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.code-bar .code-lang,
+.code-bar .code-copy {
+  color: #c9d1d9;
+  background: rgba(33, 38, 45, .92);
+  border: 1px solid #3a424d;
+  border-radius: 7px;
+  font: 600 11.5px/1 var(--np-ui-font, -apple-system, 'Segoe UI', Roboto, sans-serif);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: border-color .12s ease, color .12s ease, background .12s ease;
+}
+.code-bar .code-lang {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 5px 22px 5px 9px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23c9d1d9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+}
+.code-bar .code-lang:hover { border-color: #6e7681; color: #fff; background-color: rgba(48, 54, 61, .95); }
+.code-bar .code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+}
+.code-bar .code-copy:hover { border-color: #6e7681; color: #fff; background-color: rgba(48, 54, 61, .95); }
+.code-bar .code-copy .ico { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.code-bar .code-copy.copied { color: #7ee787; border-color: #238636; background-color: rgba(35, 134, 54, .18); }
+
+/* Empty-note placeholder (only while the note has no content) */
+.doc.is-empty::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  top: var(--np-pad-y);
+  left: var(--np-pad-x);
+  color: var(--np-gutter-fg);
+  opacity: .7;
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* Horizontal rule (divider) */
+.doc hr {
+  border: 0;
+  border-top: 2px solid var(--np-border);
+  height: 0;
+  margin: 10px 0;
+}
+
+/* Checklist / task list */
+.doc ul.rn-checklist { list-style: none; padding-left: calc(var(--np-pad-x) + var(--indent, 0px)); }
+.doc ul.rn-checklist > li { position: relative; padding-left: 1.85em; }
+.doc ul.rn-checklist > li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .18em;
+  width: 1.05em;
+  height: 1.05em;
+  border: 1.5px solid color-mix(in srgb, var(--np-fg) 42%, var(--np-bg));
+  border-radius: 4px;
+  background: var(--np-bg);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.doc ul.rn-checklist > li[data-checked]::before {
+  background: var(--np-accent);
+  border-color: var(--np-accent);
+}
+.doc ul.rn-checklist > li[data-checked]::after {
+  content: "";
+  position: absolute;
+  left: .36em;
+  top: .28em;
+  width: .3em;
+  height: .58em;
+  border: solid var(--np-accent-contrast);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.doc ul.rn-checklist > li[data-checked] {
+  color: color-mix(in srgb, var(--np-fg) 45%, var(--np-bg));
+  text-decoration: line-through;
+}
+
 /* Tables */
 .doc > table.rn-table { width: max-content; min-width: 0; max-width: none; }
 .doc table.rn-table {
@@ -1001,6 +1188,20 @@ a.about-row:hover { background: var(--np-accent-soft); }
   color: #fff;
   font-weight: 600;
 }
+/* Save-state indicator */
+.st-save { font-weight: 600; transition: color .18s ease; }
+.st-save::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: currentColor;
+}
+.st-save.saved  { color: color-mix(in srgb, #16a34a 78%, var(--np-fg)); }
+.st-save.saving { color: var(--np-accent); }
 
 /* Scrollbar */
 .doc::-webkit-scrollbar { width: 14px; height: 14px; }
@@ -1162,6 +1363,33 @@ a.about-row:hover { background: var(--np-accent-soft); }
   font-variant-numeric: tabular-nums;
 }
 .mc-find-sep { width: 1px; align-self: stretch; margin: 2px 1px; background: var(--np-border); }
+/* Find options: Match case (Aa) / Whole word (ab) / Regex (.*) */
+.mc-find-opt {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--np-gutter-fg);
+  font: 700 12px var(--np-ui-font);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.mc-find-opt:hover { background: var(--tb-hover); color: var(--np-fg); }
+.mc-find-opt.active {
+  background: var(--np-accent-soft);
+  border-color: var(--np-accent);
+  color: var(--np-accent);
+}
+.mc-opt-word { text-decoration: underline; }
+.mc-find-input.error {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .15);
+}
 .mc-find-btn {
   height: 30px;
   min-width: 30px;
@@ -1289,13 +1517,45 @@ a.about-row:hover { background: var(--np-accent-soft); }
   .about-body { padding: 16px 16px 4px; }
   .about-foot { padding: 12px 16px 16px; }
   .modal-backdrop { padding: 12px; }
-  .about-qr { height: 140px; }
+  .about-qr-item { max-width: 140px; }
   .sc-cols { column-count: 1; }
   .sc-head, .sc-body, .sc-foot { padding-left: 16px; padding-right: 16px; }
 }
 
 /* Very small phones */
 @media (max-width: 380px) {
-  .about-qr { height: 128px; }
+  .about-qr-item { max-width: 128px; }
   .tsel-style { min-width: 92px; }
+}
+
+/* ============================================================
+   ACCESSIBILITY — keyboard focus ring (mouse clicks stay ring-free)
+   ============================================================ */
+.tbtn:focus-visible,
+.tdrop-opt:focus-visible,
+.tcolor:focus-visible,
+.tsize-arrow:focus-visible,
+.tsize-opt:focus-visible,
+.menu-title:focus-visible,
+.menu-item:focus-visible,
+.tsel:focus-visible,
+.mc-find-btn:focus-visible,
+.mc-find-opt:focus-visible,
+.mc-find-toggle:focus-visible,
+.link-btn:focus-visible,
+.modal-close:focus-visible,
+.rn-tt-btn:focus-visible,
+.color-swatch:focus-visible,
+.about-row:focus-visible {
+  outline: 2px solid var(--np-accent);
+  outline-offset: 1px;
+  border-radius: 6px;
+}
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
 }

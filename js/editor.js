@@ -53,6 +53,9 @@
   var scModal     = document.getElementById('scModal');
   var scClose     = document.getElementById('scClose');
   var fpBtn       = document.getElementById('fpBtn');
+  var codeBar     = document.getElementById('codeBar');
+  var codeLang    = document.getElementById('codeLang');
+  var codeCopy    = document.getElementById('codeCopy');
 
   /* Default color palette (Google Sheets style) */
   var PALETTE = [
@@ -85,14 +88,14 @@
   var REPEATABLE = {
     bold: 1, italic: 1, underline: 1, strike: 1, sub: 1, super: 1, code: 1,
     h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, p: 1, quote: 1,
-    left: 1, center: 1, right: 1, justify: 1, ul: 1, ol: 1, indent: 1, outdent: 1, clear: 1
+    left: 1, center: 1, right: 1, justify: 1, ul: 1, ol: 1, checklist: 1, indent: 1, outdent: 1, clear: 1
   };
 
   /* ---------- Utilities ---------- */
   function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
-  var BLOCK_RE = /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|UL|OL|PRE|LI|TABLE)$/;
+  var BLOCK_RE = /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|UL|OL|PRE|LI|TABLE|HR)$/;
   // Wrap top-level text/inline nodes into blocks so every line is a block
   function normalizeBlocks() {
     var nodes = Array.prototype.slice.call(editor.childNodes);
@@ -170,16 +173,75 @@
   function ensureContent() {
     if (editor.children.length === 0) editor.innerHTML = '<p><br></p>';
   }
+  // Split a block that packs several lines with <br> (e.g. execCommand's multi-line
+  // <blockquote>Line1<br>Line2</blockquote>) into one block PER LINE of the same tag, so
+  // each line gets its own gutter number. A lone filler <br> (an empty line) is kept as is.
+  function splitBlockOnBr(block) {
+    var segs = [[]], nodes = Array.prototype.slice.call(block.childNodes), hasBr = false;
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].nodeType === 1 && nodes[i].tagName === 'BR') { hasBr = true; segs.push([]); }
+      else segs[segs.length - 1].push(nodes[i]);
+    }
+    if (!hasBr || nodes.length <= 1) return false;          // no split for a lone/empty <br>
+    if (segs.length > 1 && segs[segs.length - 1].length === 0) segs.pop();   // drop trailing empty segment
+    var keepClass = (block.className || '').replace(/\bcurrent-line\b/, '').trim();
+    var style = block.getAttribute('style');
+    var frag = document.createDocumentFragment();
+    for (var s = 0; s < segs.length; s++) {
+      var nb = document.createElement(block.tagName);
+      if (keepClass) nb.className = keepClass;
+      if (style) nb.setAttribute('style', style);
+      if (segs[s].length) { for (var j = 0; j < segs[s].length; j++) nb.appendChild(segs[s][j]); }
+      else nb.appendChild(document.createElement('br'));
+      frag.appendChild(nb);
+    }
+    block.parentNode.replaceChild(frag, block);
+    return true;
+  }
+  // Keep every multi-line paragraph-style block (quote/heading/normal) as one block per
+  // line. This mirrors how lists (one <li> per line) and code blocks already number lines.
+  var SPLIT_RE = /^(P|DIV|BLOCKQUOTE|H1|H2|H3|H4|H5|H6)$/;
+  function splitMultilineBlocks() {
+    var kids = Array.prototype.slice.call(editor.children);
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (k.nodeType === 1 && SPLIT_RE.test(k.tagName)) splitBlockOnBr(k);
+    }
+  }
+  // Run a DOM mutation while preserving the caret, using a temporary zero-width marker
+  // that travels with its text as nodes are moved into new blocks.
+  function withCaretPreserved(mutate) {
+    var sel = window.getSelection(), marker = null;
+    if (sel.rangeCount && editor.contains(sel.anchorNode)) {
+      marker = document.createElement('span');
+      marker.setAttribute('data-caret-marker', '1');
+      marker.appendChild(document.createTextNode('​'));
+      sel.getRangeAt(0).insertNode(marker);
+    }
+    mutate();
+    if (marker && marker.parentNode) {
+      var host = marker.parentNode, next = marker.nextSibling;
+      host.removeChild(marker);
+      var r = document.createRange();
+      if (next && next.parentNode === host) { r.setStartBefore(next); }
+      else { r.selectNodeContents(host); r.collapse(false); }
+      r.collapse(true);
+      if (!host.childNodes.length) host.appendChild(document.createElement('br'));
+      sel.removeAllRanges(); sel.addRange(r);
+      host.normalize();
+    }
+  }
   // Insert an array of text lines: multiple -> a block each; a single -> inline
   function insertLines(lines) {
     if (!lines || !lines.length) return;
     if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
     editor.focus();
     if (lines.length === 1) {
-      document.execCommand('insertText', false, lines[0]);
+      if (textHasUrl(lines[0])) document.execCommand('insertHTML', false, escapeAndLinkify(lines[0]));
+      else document.execCommand('insertText', false, lines[0]);
     } else {
       var html = lines.map(function (l) {
-        return '<p>' + (l ? escapeHtml(l) : '<br>') + '</p>';
+        return '<p>' + (l ? escapeAndLinkify(l) : '<br>') + '</p>';
       }).join('');
       document.execCommand('insertHTML', false, html);
       stripSpuriousBg();
@@ -199,7 +261,7 @@
     insertLines(text.replace(/\r\n?/g, '\n').replace(/\n{2,}/g, '\n').split('\n'));
   }
   /* ---------- Formatted paste (keep bold/colors/links) with sanitising ---------- */
-  var PASTE_TAGS = { P:1, DIV:1, BR:1, SPAN:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, DEL:1,
+  var PASTE_TAGS = { P:1, DIV:1, BR:1, HR:1, SPAN:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, DEL:1,
     MARK:1, CODE:1, PRE:1, A:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1, FONT:1, SUB:1, SUP:1,
     TABLE:1, THEAD:1, TBODY:1, TFOOT:1, TR:1, TD:1, TH:1, CAPTION:1, COLGROUP:1, COL:1 };
   var STYLE_KEEP = ['color', 'background-color', 'font-weight', 'font-style',
@@ -245,6 +307,14 @@
         } else if (name === 'style') {
           var s = filterStyle(el);
           if (s) el.setAttribute('style', s); else el.removeAttribute('style');
+        } else if (name === 'class' && el.tagName === 'UL' && /\brn-checklist\b/.test(attrs[k].value)) {
+          el.setAttribute('class', 'rn-checklist');            // keep checklist lists intact on paste
+        } else if (name === 'class' && el.tagName === 'PRE' && /\brn-code\b/.test(attrs[k].value)) {
+          el.setAttribute('class', 'rn-code');                 // keep code blocks intact on paste
+        } else if (name === 'data-lang' && el.tagName === 'PRE') {
+          /* keep a code block's language */
+        } else if (name === 'data-checked' && el.tagName === 'LI') {
+          /* keep a checklist item's checked state */
         } else {
           el.removeAttribute(attrs[k].name);
         }
@@ -272,8 +342,10 @@
     stripSpuriousBg();
     normalizeBlocks();
     liftLists();
+    splitMultilineBlocks();             // one block per line for pasted multi-line quotes
     styleTables();
     ensureContent();
+    highlightAllCode();                 // colour any pasted code blocks
     onChange();
   }
 
@@ -439,8 +511,19 @@
       var b = blocks[i];
       if (b.offsetHeight === 0) continue;                 // skip empty zero-height blocks
       var cs = window.getComputedStyle(b);
-      var top = b.offsetTop + (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.marginTop) || 0);
       var lh = parseFloat(cs.lineHeight) || 26;
+      // A code block numbers EVERY text line, not just the block as a whole.
+      if (isCodeBlock(b)) {
+        var codeEl = codeTextEl(b);
+        // offsetTop is the border-box top (margin excluded); align to the first text line.
+        var base = b.offsetTop + (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0);
+        var txt = codeSrc(b);
+        var nLines = txt.length ? txt.split('\n').length : 1;
+        var activeLine = (b === cur) ? codeCaretLine(codeEl) : -1;
+        for (var cl = 0; cl < nLines; cl++) lines.push({ top: base + cl * lh, lh: lh, active: cl === activeLine });
+        continue;
+      }
+      var top = b.offsetTop + (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.marginTop) || 0);
       var key = Math.round(top);
       if (seen[key] === undefined) { seen[key] = lines.length; lines.push({ top: top, lh: lh, active: false }); }
       if (b === cur) lines[seen[key]].active = true;      // current line
@@ -467,25 +550,41 @@
   /* ---------- Status bar ---------- */
   function updateStatus(cur) {
     var blocks = lineUnits();
-    var seen = {}, count = 0, ln = 1;
+    var seen = {}, count = 0, ln = 1, col = 1;
+    var sel = window.getSelection();
     for (var i = 0; i < blocks.length; i++) {
       var b = blocks[i];
       if (b.offsetHeight === 0) continue;
+      if (isCodeBlock(b)) {
+        var codeEl = codeTextEl(b);
+        var ctxt = codeSrc(b);
+        var n = ctxt.length ? ctxt.split('\n').length : 1;
+        if (b === cur) {
+          var off = caretOffsetIn(codeEl); if (off == null) off = 0;
+          var before = ctxt.slice(0, off);
+          ln = count + (before.match(/\n/g) || []).length + 1;
+          col = before.length - before.lastIndexOf('\n');   // chars after the last newline (+1)
+        }
+        count += n;
+        continue;
+      }
       var key = Math.round(b.offsetTop);
       if (seen[key] === undefined) seen[key] = ++count;
-      if (b === cur) ln = seen[key];
-    }
-    var col = 1;
-    var sel = window.getSelection();
-    if (cur && sel.rangeCount) {
-      var r = sel.getRangeAt(0);
-      var pre = r.cloneRange();
-      pre.selectNodeContents(cur);
-      pre.setEnd(r.endContainer, r.endOffset);
-      col = pre.toString().length + 1;
+      if (b === cur) {
+        ln = seen[key];
+        if (sel.rangeCount) {
+          var r = sel.getRangeAt(0);
+          var pre = r.cloneRange();
+          pre.selectNodeContents(cur);
+          pre.setEnd(r.endContainer, r.endOffset);
+          col = pre.toString().length + 1;
+        }
+      }
     }
     stPos.innerHTML = 'Ln : ' + ln + '&nbsp;&nbsp;Col : ' + col;
-    stLen.innerHTML = 'length : ' + editor.textContent.length +
+    var txt = editor.textContent;
+    var words = (txt.match(/\S+/g) || []).length;
+    stLen.innerHTML = 'words : ' + words + '&nbsp;&nbsp;length : ' + txt.length +
                       '&nbsp;&nbsp;lines : ' + Math.max(1, count);
     var selLen = (sel && sel.rangeCount) ? sel.toString().length : 0;
     stSel.textContent = selLen > 0 ? ('Sel : ' + selLen) : '';
@@ -497,8 +596,15 @@
   editor.addEventListener('scroll', function () {
     if (gutterSyncRaf) return;
     gutterSyncRaf = true;
-    requestAnimationFrame(function () { gutterSyncRaf = false; syncGutterScroll(); });
+    requestAnimationFrame(function () {
+      gutterSyncRaf = false;
+      syncGutterScroll();
+      if (codeBarFor && codeBar && codeBar.classList.contains('show')) positionCodeBar(codeBarFor);
+    });
   }, { passive: true });
+  window.addEventListener('resize', function () {
+    if (codeBarFor && codeBar && codeBar.classList.contains('show')) positionCodeBar(codeBarFor);
+  });
 
   /* ---------- Toolbar button states ---------- */
   function q(cmd) { try { return document.queryCommandState(cmd); } catch (e) { return false; } }
@@ -521,7 +627,7 @@
   }
   function setActive(cmd, on) {
     var btn = toolbar.querySelector('.tbtn[data-cmd="' + cmd + '"]');
-    if (btn) btn.classList.toggle('active', !!on);
+    if (btn) { btn.classList.toggle('active', !!on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   }
   function setEnabled(cmd, on) {
     var els = document.querySelectorAll('.tbtn[data-cmd="' + cmd + '"], .menu-item[data-cmd="' + cmd + '"]');
@@ -565,22 +671,49 @@
   }
   function updateLists() {
     if (!listBtn) return;
-    var ul = q('insertUnorderedList'), ol = q('insertOrderedList');
+    var ul = q('insertUnorderedList'), ol = q('insertOrderedList'), chk = inChecklist();
     if (listCur) listCur.innerHTML = ol ? LIST_ICONS.ol : LIST_ICONS.ul;   // reflect active list; bullet as neutral default
-    listBtn.classList.toggle('active', ul || ol);
-    setOpt(listPop, 'ul', ul);
+    listBtn.classList.toggle('active', ul || ol || chk);
+    setOpt(listPop, 'ul', ul && !chk);   // a checklist is a <ul>; don't light both up
     setOpt(listPop, 'ol', ol);
+    setOpt(listPop, 'checklist', chk);
   }
   function updateFmtExtra() {
     if (!fmtBtn) return;
-    var st = q('strikeThrough'), su = q('subscript'), sp = q('superscript'), cd = inCode();
+    var st = q('strikeThrough'), su = q('subscript'), sp = q('superscript');
     setOpt(fmtPop, 'strike', st);
     setOpt(fmtPop, 'sub', su);
     setOpt(fmtPop, 'super', sp);
-    setOpt(fmtPop, 'code', cd);
-    fmtBtn.classList.toggle('active', st || su || sp || cd);
+    fmtBtn.classList.toggle('active', st || su || sp);
   }
 
+  // The paragraph-style tag of a single top-level block (DIV counts as P; a code block
+  // as CODE; a list as itself — lists aren't a paragraph style).
+  function styleTagOf(block) {
+    if (!block || block.nodeType !== 1) return 'P';
+    var tn = block.tagName;
+    if (tn === 'PRE' && block.classList.contains('rn-code')) return 'CODE';
+    if (/^(H1|H2|H3|H4|H5|H6|BLOCKQUOTE)$/.test(tn)) return tn;
+    if (tn === 'DIV' || tn === 'P') return 'P';
+    return tn;   // UL/OL/TABLE/HR — not a paragraph style
+  }
+  // The common paragraph style across the whole selection, computed from the actual blocks
+  // (queryCommandValue('formatBlock') returns '' for multi-block selections, so it can't be
+  // trusted). Returns 'CODE' inside a code block, a tag if all lines share it, else '' (mixed).
+  function selectedBlockStyle() {
+    var sel = window.getSelection();
+    if (sel.rangeCount && codeBlockOf(sel.anchorNode)) return 'CODE';
+    var blocks = selectedBlocks();
+    if (!blocks.length) { var cb = currentBlock(); blocks = cb ? [cb] : []; }
+    if (!blocks.length) return 'P';
+    var tag = null;
+    for (var i = 0; i < blocks.length; i++) {
+      var t = styleTagOf(blocks[i]);
+      if (/^(UL|OL|TABLE|HR)$/.test(t)) t = 'P';        // lists/tables read as neutral for the style select
+      if (tag === null) tag = t; else if (tag !== t) return '';   // mixed
+    }
+    return tag || 'P';
+  }
   function updateToolbar() {
     setActive('bold', q('bold'));
     setActive('italic', q('italic'));
@@ -588,12 +721,13 @@
     updateFmtExtra();   // strike / sub / super / code (grouped dropdown)
     updateLists();      // bullet / numbered (grouped dropdown)
     updateAlign();      // left / center / right / justify (grouped dropdown)
-    var fb = '';
-    try { fb = (document.queryCommandValue('formatBlock') || '').toLowerCase(); } catch (e) {}
-    setActive('h1', fb === 'h1');
-    setActive('h2', fb === 'h2');
-    setActive('p', fb === 'p' || fb === 'div');
-    setActive('quote', fb === 'blockquote');
+    // Block style computed from the actual selected blocks (reliable for multi-line
+    // selections, unlike queryCommandValue('formatBlock')).
+    var style = selectedBlockStyle();
+    setActive('h1', style === 'H1');
+    setActive('h2', style === 'H2');
+    setActive('p', style === 'P');
+    setActive('quote', style === 'BLOCKQUOTE');
     setActive('link', !!currentLinkEl());
     setActive('wrap', wrapOn);
     if (wrapItem) wrapItem.classList.toggle('checked', wrapOn);
@@ -602,9 +736,8 @@
     try { setEnabled('undo', document.queryCommandEnabled('undo')); } catch (e) {}
     try { setEnabled('redo', document.queryCommandEnabled('redo')); } catch (e) {}
 
-    // Sync the paragraph-style select with the current block
-    var fbU = fb ? fb.toUpperCase() : '';
-    styleSelect.value = /^(H1|H2|H3|H4|H5|H6|BLOCKQUOTE)$/.test(fbU) ? fbU : 'P';
+    // Sync the paragraph-style select: the shared style, or blank when the lines are mixed.
+    styleSelect.value = style;   // '' (no option) shows blank for a mixed selection
 
     // Sync the font & size selects + the colour swatches with the selection (Word-like)
     var el = selEl();
@@ -655,10 +788,12 @@
     if (cur) cur.classList.add('current-line');
     renderGutter(cur);
     updateStatus(cur);
+    if (codeBarFor) positionCodeBar(codeBarFor);   // keep the hover bar glued as the block reflows
     updateToolbar();
     var topCur = currentBlock();
     updateTableTool(topCur);
     if (cellSel.length && !dragging && topCur !== cellSelTable) clearCellSel();
+    updateEmptyState();
   }
 
   function onChange() { refresh(); save(); }
@@ -711,6 +846,279 @@
     }
   }
 
+  /* ---------- Code block (syntax-highlighted, per-line numbered) ----------
+     A code block is a top-level <pre class="rn-code" data-lang="…"><code>…</code></pre>.
+     highlight.js paints the tokens; the left gutter numbers every text line; a floating
+     bar (language picker + copy) is anchored to the block while the caret is inside. */
+  var HLJS = window.hljs || null;
+  // Curated language list for the dropdown: [value, label]. 'auto' = auto-detect.
+  var CODE_LANGS = [
+    ['auto', 'Auto-detect'], ['plaintext', 'Plain text'],
+    ['javascript', 'JavaScript'], ['typescript', 'TypeScript'],
+    ['xml', 'HTML / XML'], ['css', 'CSS'], ['scss', 'SCSS'], ['json', 'JSON'],
+    ['python', 'Python'], ['java', 'Java'], ['c', 'C'], ['cpp', 'C++'],
+    ['csharp', 'C#'], ['go', 'Go'], ['rust', 'Rust'], ['php', 'PHP'],
+    ['ruby', 'Ruby'], ['swift', 'Swift'], ['kotlin', 'Kotlin'], ['sql', 'SQL'],
+    ['bash', 'Bash / Shell'], ['yaml', 'YAML'], ['markdown', 'Markdown'],
+    ['lua', 'Lua'], ['r', 'R'], ['perl', 'Perl'], ['objectivec', 'Objective-C'],
+    ['ini', 'INI / TOML'], ['makefile', 'Makefile'], ['diff', 'Diff']
+  ];
+  if (codeLang) {
+    codeLang.innerHTML = CODE_LANGS.map(function (l) {
+      return '<option value="' + l[0] + '">' + l[1] + '</option>';
+    }).join('');
+  }
+  var codeBarFor = null;   // the code block the floating bar currently controls
+
+  function isCodeBlock(el) {
+    return !!(el && el.nodeType === 1 && el.tagName === 'PRE' && el.classList.contains('rn-code'));
+  }
+  function codeBlockOf(node) {
+    var n = node;
+    while (n && n !== editor) { if (isCodeBlock(n)) return n; n = n.parentNode; }
+    return null;
+  }
+  function codeTextEl(pre) { return pre.querySelector('code') || pre; }
+  // The logical source of a code block = its rendered text minus the trailing sentinel
+  // newline. We always render one extra "\n" so the caret can sit on an empty last line
+  // (a <pre> can't hold a caret AFTER a bare trailing newline — the "textarea trick").
+  function codeSrc(pre) { return codeTextEl(pre).textContent.replace(/\n$/, ''); }
+
+  // Character offset from the start of `el` to a DOM point (container, offset).
+  function offsetOfPoint(el, container, offset) {
+    var r = document.createRange();
+    r.selectNodeContents(el);
+    try { r.setEnd(container, offset); } catch (e) { return 0; }
+    return r.toString().length;
+  }
+  // Character offset of the caret within `el`, or null if the caret isn't inside.
+  function caretOffsetIn(el) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return null;
+    var r = sel.getRangeAt(0);
+    if (!el.contains(r.startContainer) && r.startContainer !== el) return null;
+    return offsetOfPoint(el, r.startContainer, r.startOffset);
+  }
+  // Place the caret `offset` characters into `el` (walking its text nodes).
+  function setCaretOffsetIn(el, offset) {
+    var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    var node, seen = 0, target = null, tOff = 0;
+    while ((node = walker.nextNode())) {
+      var len = node.nodeValue.length;
+      if (seen + len >= offset) { target = node; tOff = offset - seen; break; }
+      seen += len;
+    }
+    var r = document.createRange();
+    if (target) r.setStart(target, tOff);
+    else { r.selectNodeContents(el); r.collapse(false); }
+    r.collapse(true);
+    var sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(r);
+  }
+  // Which text line (0-based) the caret sits on inside a code element.
+  function codeCaretLine(codeEl) {
+    var off = caretOffsetIn(codeEl);
+    if (off == null) return -1;
+    return (codeEl.textContent.slice(0, off).match(/\n/g) || []).length;
+  }
+
+  // Render `logical` code text into a block with syntax highlighting, then append a
+  // sentinel newline so the last line is always caret-reachable. Restores the caret to
+  // `caretOffset` (a logical offset) when provided.
+  function renderCode(pre, logical, caretOffset) {
+    if (!pre) return;
+    var code = codeTextEl(pre);
+    var lang = pre.getAttribute('data-lang') || 'auto';
+    var out = null;
+    if (HLJS && logical) {
+      try {
+        if (lang && lang !== 'auto' && HLJS.getLanguage(lang)) {
+          out = HLJS.highlight(logical, { language: lang, ignoreIllegals: true }).value;
+        } else {
+          out = HLJS.highlightAuto(logical).value;
+        }
+      } catch (e) { out = null; }
+    }
+    code.innerHTML = ((out == null) ? escapeHtml(logical) : out) + '\n';   // trailing sentinel
+    if (caretOffset != null) setCaretOffsetIn(code, caretOffset);
+  }
+  // Re-tokenize a block from its current DOM text (preserving the caret if given).
+  function highlightCode(pre, caretOffset) { renderCode(pre, codeSrc(pre), caretOffset); }
+  function highlightAllCode() {
+    Array.prototype.forEach.call(editor.querySelectorAll('pre.rn-code'), function (pre) {
+      if (!pre.getAttribute('data-lang')) pre.setAttribute('data-lang', 'auto');
+      highlightCode(pre, null);
+    });
+  }
+
+  // Turn the current block(s) into a code block — or, if already in one, unwrap it.
+  function insertCodeBlock() {
+    editor.focus();
+    var sel = window.getSelection();
+    var existing = sel.rangeCount ? codeBlockOf(sel.anchorNode) : null;
+    if (existing) { unwrapCodeBlock(existing); onChange(); return; }
+
+    var blocks = selectedBlocks();
+    var pre = document.createElement('pre');
+    pre.className = 'rn-code';
+    pre.setAttribute('data-lang', 'auto');
+    var code = document.createElement('code');
+    pre.appendChild(code);
+
+    var logical = '';
+    if (blocks.length) {
+      logical = blocks.map(function (b) { return b.textContent; }).join('\n');
+      editor.insertBefore(pre, blocks[0]);
+      for (var i = 0; i < blocks.length; i++) if (blocks[i].parentNode === editor) editor.removeChild(blocks[i]);
+    } else {
+      editor.appendChild(pre);
+    }
+    ensureContent();
+    renderCode(pre, logical, logical.length);
+    onChange();
+  }
+  // Convert a code block back into one plain paragraph per line.
+  function unwrapCodeBlock(pre) {
+    var lines = codeSrc(pre).split('\n');
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < lines.length; i++) {
+      var p = document.createElement('p');
+      if (lines[i]) p.textContent = lines[i]; else p.appendChild(document.createElement('br'));
+      frag.appendChild(p);
+    }
+    var firstP = frag.firstChild;
+    pre.parentNode.replaceChild(frag, pre);
+    if (firstP) {
+      var r = document.createRange();
+      r.selectNodeContents(firstP); r.collapse(true);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    }
+  }
+
+  // Enter inside a code block: insert a newline; an Enter on a trailing blank line
+  // exits the block into a new paragraph below (VS Code-style escape).
+  function handleCodeEnter(cb) {
+    var code = codeTextEl(cb);
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    var r = sel.getRangeAt(0);
+    var startOff = offsetOfPoint(code, r.startContainer, r.startOffset);
+    var endOff = offsetOfPoint(code, r.endContainer, r.endOffset);
+    var text = codeSrc(cb);                    // logical text (no sentinel)
+    startOff = Math.min(startOff, text.length);
+    endOff = Math.min(endOff, text.length);
+    // Enter on an already-blank last line exits the block into a new paragraph below.
+    if (startOff === endOff && startOff === text.length && /\n$/.test(text)) {
+      renderCode(cb, text.replace(/\n$/, ''), null);
+      var p = document.createElement('p'); p.appendChild(document.createElement('br'));
+      if (cb.nextSibling) cb.parentNode.insertBefore(p, cb.nextSibling); else cb.parentNode.appendChild(p);
+      var rr = document.createRange(); rr.selectNodeContents(p); rr.collapse(true);
+      sel.removeAllRanges(); sel.addRange(rr);
+      if (codeSrc(cb) === '') cb.parentNode.removeChild(cb);
+      onChange();
+      return;
+    }
+    renderCode(cb, text.slice(0, startOff) + '\n' + text.slice(endOff), startOff + 1);
+    onChange();
+  }
+
+  // Live re-highlight while typing (debounced, and never mid-IME-composition).
+  var codeHiTimer = null, codeComposing = false;
+  function scheduleCodeHighlight() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !codeBlockOf(sel.anchorNode)) return;
+    if (codeHiTimer) clearTimeout(codeHiTimer);
+    codeHiTimer = setTimeout(function () {
+      codeHiTimer = null;
+      if (codeComposing) { scheduleCodeHighlight(); return; }
+      var s = window.getSelection();
+      var block = s.rangeCount ? codeBlockOf(s.anchorNode) : null;
+      if (!block) return;
+      highlightCode(block, caretOffsetIn(codeTextEl(block)));
+      save();
+    }, 180);
+  }
+  editor.addEventListener('input', scheduleCodeHighlight);
+  editor.addEventListener('compositionstart', function () { codeComposing = true; });
+  editor.addEventListener('compositionend', function () { codeComposing = false; scheduleCodeHighlight(); });
+
+  // The language + copy bar is hidden by default and revealed when the pointer hovers a
+  // code block (or the bar itself). It's absolutely positioned inside .editor-area, over
+  // the block's top-right corner, and kept out of the saved note content.
+  var codeBarHideTimer = null;
+  var editorArea = editor.parentNode;   // .editor-area (positioned ancestor)
+  function showCodeBar(cb) {
+    if (!codeBar || !cb) return;
+    if (codeBarHideTimer) { clearTimeout(codeBarHideTimer); codeBarHideTimer = null; }
+    codeBarFor = cb;
+    var lang = cb.getAttribute('data-lang') || 'auto';
+    if (codeLang && codeLang.value !== lang) codeLang.value = lang;
+    codeBar.classList.add('show');
+    codeBar.setAttribute('aria-hidden', 'false');
+    positionCodeBar(cb);
+  }
+  function hideCodeBar(now) {
+    if (!codeBar) return;
+    if (codeBarHideTimer) { clearTimeout(codeBarHideTimer); codeBarHideTimer = null; }
+    var doHide = function () { codeBar.classList.remove('show'); codeBar.setAttribute('aria-hidden', 'true'); codeBarFor = null; };
+    if (now) doHide(); else codeBarHideTimer = setTimeout(doHide, 140);
+  }
+  function positionCodeBar(cb) {
+    if (!codeBar || !cb || !codeBar.classList.contains('show')) return;
+    var r = cb.getBoundingClientRect();
+    var area = editorArea.getBoundingClientRect();
+    // Hide when the block is scrolled out of the visible editor area
+    if (r.bottom < area.top + 4 || r.top > area.bottom - 4) { hideCodeBar(true); return; }
+    var bw = codeBar.offsetWidth || 140;
+    var top = Math.max(r.top - area.top, 0) + 6;
+    var left = (r.right - area.left) - bw - 10;
+    codeBar.style.top = top + 'px';
+    codeBar.style.left = Math.max(6, left) + 'px';
+  }
+  if (editor) {
+    editor.addEventListener('mouseover', function (e) {
+      var cb = codeBlockOf(e.target);
+      if (cb) showCodeBar(cb);
+    });
+    editor.addEventListener('mouseout', function (e) {
+      // Leaving the editor for something other than the bar → schedule hide
+      var to = e.relatedTarget;
+      if (to && (codeBar.contains(to) || codeBlockOf(to))) return;
+      hideCodeBar(false);
+    });
+  }
+  if (codeBar) {
+    codeBar.addEventListener('mouseenter', function () { if (codeBarHideTimer) { clearTimeout(codeBarHideTimer); codeBarHideTimer = null; } });
+    codeBar.addEventListener('mouseleave', function () { hideCodeBar(false); });
+  }
+  function activeCodeBlock() {
+    if (codeBarFor) return codeBarFor;
+    var s = window.getSelection();
+    return s.rangeCount ? codeBlockOf(s.anchorNode) : null;
+  }
+  if (codeLang) codeLang.addEventListener('change', function () {
+    var cb = activeCodeBlock();
+    if (!cb) return;
+    cb.setAttribute('data-lang', this.value);
+    var s = window.getSelection();
+    var inside = s.rangeCount && codeBlockOf(s.anchorNode) === cb;
+    highlightCode(cb, inside ? caretOffsetIn(codeTextEl(cb)) : null);
+    onChange();
+  });
+  if (codeCopy) codeCopy.addEventListener('click', function () {
+    var cb = activeCodeBlock();
+    if (!cb) return;
+    var text = codeSrc(cb);
+    var lbl = codeCopy.querySelector('.code-copy-label');
+    var done = function () {
+      codeCopy.classList.add('copied');
+      if (lbl) lbl.textContent = 'Copied';
+      setTimeout(function () { codeCopy.classList.remove('copied'); if (lbl) lbl.textContent = 'Copy'; }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, done);
+    else done();
+  });
+
   // Position the fixed popup right below its button so the toolbar overflow can't clip it
   function positionPopup(pop, anchor) {
     var r = anchor.getBoundingClientRect();
@@ -762,24 +1170,46 @@
   }
 
   /* ---------- About / Donate dialog ---------- */
+  // Keep keyboard focus inside an open modal (Tab / Shift+Tab cycle its controls).
+  function modalFocusables(modal) {
+    return Array.prototype.slice.call(
+      modal.querySelectorAll('a[href],button:not([disabled]),input,[tabindex]:not([tabindex="-1"])')
+    ).filter(function (el) { return el.offsetParent !== null; });
+  }
+  function trapModalTab(modal) {
+    modal.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Tab' || !modal.classList.contains('open')) return;
+      var f = modalFocusables(modal);
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+    });
+  }
   function openAbout() {
     closeMenus();
     aboutModal.classList.add('open');
     aboutModal.setAttribute('aria-hidden', 'false');
+    setTimeout(function () { if (aboutClose) aboutClose.focus(); }, 0);
   }
   function closeAbout() {
     aboutModal.classList.remove('open');
     aboutModal.setAttribute('aria-hidden', 'true');
+    editor.focus();
   }
   function openShortcuts() {
     closeMenus();
     scModal.classList.add('open');
     scModal.setAttribute('aria-hidden', 'false');
+    setTimeout(function () { if (scClose) scClose.focus(); }, 0);
   }
   function closeShortcuts() {
     scModal.classList.remove('open');
     scModal.setAttribute('aria-hidden', 'true');
+    editor.focus();
   }
+  trapModalTab(aboutModal);
+  if (scModal) trapModalTab(scModal);
 
   // Font size in px: use the <font size=7> trick, then swap to inline style (on the current selection)
   function applyFontSize(px) {
@@ -899,7 +1329,18 @@
   }
   function applyBlockFormat(tag) {
     editor.focus();
-    if (!currentListItem()) { document.execCommand('formatBlock', false, tag); return; }
+    if (tag === 'CODE') { insertCodeBlock(); return; }
+    // Leaving a code block for another paragraph style: unwrap it back to plain lines first.
+    var selCb = window.getSelection();
+    var cb = selCb.rangeCount ? codeBlockOf(selCb.anchorNode) : null;
+    if (cb) unwrapCodeBlock(cb);
+    if (!currentListItem()) {
+      document.execCommand('formatBlock', false, tag);
+      // execCommand can merge a multi-line selection into one <blockquote>/<p> joined by
+      // <br>; split it back so each line stays its own numbered block (both apply & remove).
+      withCaretPreserved(splitMultilineBlocks);
+      return;
+    }
     var lis = selectedListItems();
     for (var i = 0; i < lis.length; i++) setListItemBlock(lis[i], tag);
   }
@@ -1495,7 +1936,8 @@
       case 'strike':    execTag('strikeThrough'); break;
       case 'sub':       execTag('subscript'); break;
       case 'super':     execTag('superscript'); break;
-      case 'code':      toggleCode(); break;
+      // "Code" now produces a code block; inside a table cell fall back to inline code.
+      case 'code':      if (currentCell()) { toggleCode(); break; } insertCodeBlock(); return;
       case 'h1':        applyBlockFormat('H1'); break;
       case 'h2':        applyBlockFormat('H2'); break;
       case 'h3':        applyBlockFormat('H3'); break;
@@ -1504,8 +1946,11 @@
       case 'h6':        applyBlockFormat('H6'); break;
       case 'p':         applyBlockFormat('P'); break;
       case 'quote':     applyBlockFormat('BLOCKQUOTE'); break;
+      case 'codeblock': applyBlockFormat('CODE'); return;
       case 'ul':        document.execCommand('insertUnorderedList'); liftLists(); break;
       case 'ol':        document.execCommand('insertOrderedList');   liftLists(); break;
+      case 'checklist': toggleChecklist(); return;
+      case 'hr':        insertHR(); return;
       case 'left':      document.execCommand('justifyLeft'); break;
       case 'center':    document.execCommand('justifyCenter'); break;
       case 'right':     document.execCommand('justifyRight'); break;
@@ -1825,6 +2270,7 @@
       h1: g('H1'), h2: g('H2'), h3: g('H3'), h4: g('H4'), h5: g('H5'), h6: g('H6'),
       p: g('¶'),
       quote: s('<path d="M3.3 4.2v7.6" stroke-width="2"/><path d="M6.3 5.4h7M6.3 8h7M6.3 10.6h5"/>'),
+      codeblock: s('<rect x="1.8" y="3" width="12.4" height="10" rx="1.6"/><path d="M6.4 6.4 4.4 8l2 1.6M9.6 6.4 11.6 8l-2 1.6"/>'),
       left: s('<path d="M2 4h12M2 8h8M2 12h12"/>'),
       center: s('<path d="M2 4h12M4 8h8M2 12h12"/>'),
       right: s('<path d="M2 4h12M6 8h8M2 12h12"/>'),
@@ -1834,7 +2280,9 @@
       link: s('<path d="M6.7 9.3 9.3 6.7"/><path d="M8.4 4.6l1-1a2.7 2.7 0 0 1 3.9 3.9l-1 1"/><path d="M7.6 11.4l-1 1a2.7 2.7 0 0 1-3.9-3.9l1-1"/>'),
       ul: s('<circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/>'),
       ol: s('<path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text>'),
+      checklist: s('<rect x="2" y="2.6" width="5" height="5" rx="1"/><path d="M3 5l1.2 1.2L6.4 4"/><path d="M9.5 4.6h5"/><path d="M2 11.4h5M9.5 11.4h5"/>'),
       table: s('<rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6.5h12M2 9.7h12M6.4 3v10M10 3v10"/>'),
+      hr: s('<path d="M2 8h12"/><path d="M3.4 4.4h9.2M3.4 11.6h9.2" opacity=".45"/>'),
       wrap: s('<path d="M2 4h12M2 8h8.4a2.4 2.4 0 0 1 0 4.8H7.4"/><path d="M9.2 10.8 7.4 12.8l1.8 2"/>'),
       minimap: s('<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M10.2 3.5v9" opacity=".55"/><path d="M4.6 5.6h3.4M4.6 8h4.2M4.6 10.4h2.6" stroke-width="1"/>'),
       shortcuts: s('<rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 6.5h0M6 6.5h0M8 6.5h0M10 6.5h0M12 6.5h0M4 9h0M12 9h0M6 9.4h4" stroke-linecap="round"/>'),
@@ -1933,6 +2381,32 @@
     // F4: repeat the last formatting action (like Google Sheets)
     if (ev.key === 'F4') { ev.preventDefault(); if (lastAction) lastAction(); return; }
 
+    // Inside a code block, Enter always inserts a newline (never a new paragraph); the
+    // block manages its own text + syntax highlighting. Markdown auto-format is skipped.
+    var sel0 = window.getSelection();
+    var codeNow = sel0.rangeCount && editor.contains(sel0.anchorNode) ? codeBlockOf(sel0.anchorNode) : null;
+    if (codeNow && ev.key === 'Enter') { ev.preventDefault(); handleCodeEnter(codeNow); return; }
+
+    // Auto-format: a Markdown marker + Space at the line start → heading / list / quote / checklist
+    if (ev.key === ' ' && !mod && !ev.altKey && !ev.shiftKey) {
+      if (maybeMarkdownBlock()) { ev.preventDefault(); return; }
+      linkifyBeforeCaret();               // a bare URL just typed → link it (the space still types)
+      return;
+    }
+    // Enter on a "---" / "***" / "___" line → horizontal rule; else auto-link a URL just typed
+    if (ev.key === 'Enter' && !ev.shiftKey && !mod && !ev.altKey) {
+      if (maybeHorizontalRule()) { ev.preventDefault(); return; }
+      linkifyBeforeCaret();
+      return;
+    }
+    // Alt+Up / Alt+Down — move the current line(s) up / down (VS Code style)
+    if (ev.altKey && !ev.shiftKey && !mod && (ev.key === 'ArrowUp' || ev.key === 'ArrowDown')) {
+      if (mcActive()) return;
+      ev.preventDefault();
+      moveLine(ev.key === 'ArrowUp' ? -1 : 1);
+      return;
+    }
+
     // Shift+Enter -> create a NEW block (new line), not a soft line break
     if (ev.key === 'Enter' && ev.shiftKey && !mod) {
       ev.preventDefault();
@@ -1978,7 +2452,6 @@
       else handled = false;
     } else if (ev.shiftKey) {
       if (c === 'KeyX') exec('strike');
-      else if (c === 'KeyC') exec('code');
       else if (c === 'Equal') exec('super');          // Ctrl+Shift+=  superscript
       else if (c === 'KeyV') {                                                    // Ctrl+Shift+V  paste value only
         // Arm 'plain', then try execCommand('paste') in this keydown gesture. In Electron/SN
@@ -1995,6 +2468,8 @@
       else if (c === 'KeyP') exec('formatPainter');   // Ctrl+Shift+P  copy formatting
       else if (c === 'Period') changeFontSize(1);     // Ctrl+Shift+.  increase font size
       else if (c === 'Comma') changeFontSize(-1);     // Ctrl+Shift+,  decrease font size
+      else if (c === 'KeyD') duplicateLine();         // Ctrl+Shift+D  duplicate line
+      else if (c === 'KeyK') deleteLine();            // Ctrl+Shift+K  delete line
       else if (c === 'KeyZ') { document.execCommand('redo'); onChange(); }
       else handled = false;
     } else {
@@ -2004,6 +2479,7 @@
       else if (c === 'KeyJ') exec('justify');
       else if (c === 'Equal') exec('sub');            // Ctrl+=  subscript
       else if (c === 'KeyK') exec('link');
+      else if (c === 'KeyH') exec('findReplace');     // Ctrl+H  Find & Replace
       else if (c === 'Backslash') exec('clear');
       else if (c === 'KeyY') { document.execCommand('redo'); onChange(); }
       // With a multi-cell or discontiguous (Ctrl+drag) selection, route Ctrl+B/I/U through
@@ -2016,11 +2492,264 @@
     if (handled) ev.preventDefault();
   });
 
+  /* ============================================================
+     EMPTY-STATE PLACEHOLDER
+     ============================================================ */
+  function isEditorEmpty() {
+    if (editor.querySelector('img,table,hr,li')) return false;
+    if (editor.children.length > 1) return false;
+    return !/\S/.test(editor.textContent);
+  }
+  function updateEmptyState() { editor.classList.toggle('is-empty', isEditorEmpty()); }
+
+  /* ============================================================
+     SAVE-STATE INDICATOR (status bar)
+     ============================================================ */
+  var stSave = document.getElementById('st-save');
+  var saveStateTimer = null;
+  function setSaveState(saving) {
+    if (!stSave) return;
+    stSave.textContent = saving ? 'Saving…' : 'Saved';
+    stSave.classList.toggle('saving', !!saving);
+    stSave.classList.toggle('saved', !saving);
+  }
+
+  /* ============================================================
+     AUTO-LINKIFY  (paste + type-then-space)
+     ============================================================ */
+  var URL_RE = /\b(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+)/gi;
+  function trimTrailingPunct(u) {                 // don't swallow trailing . , ) ] etc.
+    var m = /[.,;:!?)\]}"'»]+$/.exec(u);
+    return m ? u.slice(0, u.length - m[0].length) : u;
+  }
+  function textHasUrl(text) { URL_RE.lastIndex = 0; return URL_RE.test(text); }
+  // Escape a plain-text line to HTML, turning bare URLs into <a> links.
+  function escapeAndLinkify(text) {
+    var out = '', last = 0, m;
+    URL_RE.lastIndex = 0;
+    while ((m = URL_RE.exec(text))) {
+      var raw = trimTrailingPunct(m[0]);
+      var start = m.index;
+      out += escapeHtml(text.slice(last, start));
+      var href = /^www\./i.test(raw) ? 'https://' + raw : raw;
+      out += '<a href="' + escapeHtml(href) + '">' + escapeHtml(raw) + '</a>';
+      last = start + raw.length;
+      URL_RE.lastIndex = last;
+    }
+    out += escapeHtml(text.slice(last));
+    return out;
+  }
+  // Turn the URL token that ends right at the caret into a link (called on Space/Enter).
+  function linkifyBeforeCaret() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount) return false;
+    var r = sel.getRangeAt(0);
+    if (!r.collapsed) return false;
+    var node = r.startContainer;
+    if (node.nodeType !== 3 || closestTag(node, 'A')) return false;
+    var offset = r.startOffset;
+    var tok = /(\S+)$/.exec(node.nodeValue.slice(0, offset));
+    if (!tok) return false;
+    var token = tok[1];
+    URL_RE.lastIndex = 0;
+    var um = URL_RE.exec(token);
+    if (!um || um.index !== 0) return false;
+    var raw = trimTrailingPunct(token);
+    if (raw.length < 6) return false;
+    var startPos = offset - token.length;
+    var wrap = document.createRange();
+    wrap.setStart(node, startPos);
+    wrap.setEnd(node, startPos + raw.length);
+    sel.removeAllRanges(); sel.addRange(wrap);
+    var href = /^www\./i.test(raw) ? 'https://' + raw : raw;
+    document.execCommand('insertHTML', false, '<a href="' + escapeHtml(href) + '">' + escapeHtml(raw) + '</a>');
+    return true;
+  }
+
+  /* ============================================================
+     CARET HELPERS + LINE OPERATIONS (VS Code style)
+     ============================================================ */
+  function placeCaret(el, atEnd) {
+    if (!el) return;
+    var r = document.createRange();
+    r.selectNodeContents(el); r.collapse(!atEnd);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    editor.focus();
+  }
+  function placeCaretAtEnd(el) { placeCaret(el, true); }
+
+  // The top-level blocks the operation targets (the selection's span, else the caret line).
+  function opBlocks() {
+    var blocks = selectedBlocks();
+    if (!blocks.length) { var c = currentBlock(); if (c) blocks = [c]; }
+    return blocks;
+  }
+  function duplicateLine() {
+    var blocks = opBlocks();
+    if (!blocks.length) return;
+    var last = blocks[blocks.length - 1], ref = last.nextSibling, clones = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var cl = blocks[i].cloneNode(true);
+      if (cl.classList) cl.classList.remove('current-line');
+      clones.push(cl);
+    }
+    for (var j = 0; j < clones.length; j++) last.parentNode.insertBefore(clones[j], ref);
+    placeCaretAtEnd(clones[clones.length - 1]);
+    onChange();
+  }
+  function moveLine(dir) {
+    var blocks = opBlocks();
+    if (!blocks.length) return;
+    var first = blocks[0], last = blocks[blocks.length - 1];
+    if (dir < 0) {
+      var prev = first.previousElementSibling;
+      if (!prev) return;
+      last.parentNode.insertBefore(prev, last.nextSibling);   // slide the block above down past us
+    } else {
+      var next = last.nextElementSibling;
+      if (!next) return;
+      first.parentNode.insertBefore(next, first);             // slide the block below up past us
+    }
+    onChange();
+  }
+  function deleteLine() {
+    var blocks = opBlocks();
+    if (!blocks.length) return;
+    var focus = blocks[blocks.length - 1].nextElementSibling || blocks[0].previousElementSibling;
+    for (var i = 0; i < blocks.length; i++) blocks[i].parentNode.removeChild(blocks[i]);
+    ensureContent();
+    placeCaret(focus || editor.firstElementChild, false);
+    onChange();
+  }
+
+  /* ============================================================
+     HORIZONTAL RULE
+     ============================================================ */
+  function insertHR() {
+    editor.focus();
+    var block = currentBlock();
+    var hr = document.createElement('hr');
+    if (block && isBlockEmpty(block)) editor.replaceChild(hr, block);
+    else if (block) block.parentNode.insertBefore(hr, block.nextSibling);
+    else editor.appendChild(hr);
+    var p = hr.nextElementSibling;
+    if (!p || p.tagName === 'HR' || p.tagName === 'TABLE') {
+      p = document.createElement('p'); p.appendChild(document.createElement('br'));
+      hr.parentNode.insertBefore(p, hr.nextSibling);
+    }
+    placeCaret(p, false);
+    ensureContent(); onChange();
+  }
+  // Enter on a line that is only "---" / "***" / "___" → a horizontal rule (Markdown-style).
+  function maybeHorizontalRule() {
+    var block = currentBlock();
+    if (!block || currentListItem() || block.tagName === 'TABLE') return false;
+    if (!/^(-{3,}|\*{3,}|_{3,})$/.test(block.textContent.trim())) return false;
+    var hr = document.createElement('hr');
+    editor.replaceChild(hr, block);
+    var p = document.createElement('p'); p.appendChild(document.createElement('br'));
+    hr.parentNode.insertBefore(p, hr.nextSibling);
+    placeCaret(p, false);
+    onChange();
+    return true;
+  }
+
+  /* ============================================================
+     CHECKLIST (task list)
+     ============================================================ */
+  function inChecklist() {
+    var li = currentListItem();
+    return !!(li && li.parentNode && li.parentNode.classList && li.parentNode.classList.contains('rn-checklist'));
+  }
+  function makeChecklist(checked) {
+    var block = currentBlock();
+    if (!block || block.tagName === 'TABLE' || block.tagName === 'HR') return;
+    var ul = document.createElement('ul');
+    ul.className = 'rn-checklist';
+    var li = document.createElement('li');
+    if (checked) li.setAttribute('data-checked', '');
+    while (block.firstChild) li.appendChild(block.firstChild);
+    if (!li.firstChild) li.appendChild(document.createElement('br'));
+    ul.appendChild(li);
+    block.parentNode.replaceChild(ul, block);
+    placeCaretAtEnd(li);
+    onChange();
+  }
+  function toggleChecklist() {
+    editor.focus();
+    if (inChecklist()) {                                     // checklist → back to paragraphs
+      var ul = currentListItem().parentNode, made = [];
+      Array.prototype.forEach.call(ul.children, function (item) {
+        if (item.tagName !== 'LI') return;
+        var p = document.createElement('p');
+        while (item.firstChild) p.appendChild(item.firstChild);
+        if (!p.firstChild) p.appendChild(document.createElement('br'));
+        made.push(p);
+      });
+      for (var i = 0; i < made.length; i++) ul.parentNode.insertBefore(made[i], ul);
+      ul.parentNode.removeChild(ul);
+      placeCaretAtEnd(made[0] || null);
+      ensureContent(); onChange();
+      return;
+    }
+    makeChecklist(false);
+  }
+  // Click on a checklist item's checkbox (its left gutter) toggles the done state.
+  editor.addEventListener('click', function (ev) {
+    var li = ev.target.closest ? ev.target.closest('li') : null;
+    if (!li || !editor.contains(li)) return;
+    var ul = li.parentNode;
+    if (!ul.classList || !ul.classList.contains('rn-checklist')) return;
+    var r = li.getBoundingClientRect();
+    if (ev.clientX - r.left <= 24) {                        // inside the checkbox gutter
+      ev.preventDefault();
+      li.toggleAttribute('data-checked');
+      onChange();
+    }
+  });
+
+  /* ============================================================
+     MARKDOWN AUTO-FORMAT  (typed marker + Space at line start)
+     ============================================================ */
+  var MD_HEADING = /^#{1,6}$/;
+  function maybeMarkdownBlock() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return false;
+    var block = currentBlock();
+    if (!block || currentListItem()) return false;          // don't fire inside a list
+    if (block.tagName === 'TABLE' || block.tagName === 'HR') return false;
+    var r = sel.getRangeAt(0);
+    var pre = document.createRange();
+    pre.selectNodeContents(block);
+    try { pre.setEnd(r.startContainer, r.startOffset); } catch (e) { return false; }
+    var before = pre.toString();
+    var apply = null;
+    if (MD_HEADING.test(before)) { var lvl = before.length; apply = function () { applyBlockFormat('H' + lvl); }; }
+    else if (before === '-' || before === '*') apply = function () { exec('ul'); };
+    else if (before === '1.') apply = function () { exec('ol'); };
+    else if (before === '>') apply = function () { applyBlockFormat('BLOCKQUOTE'); };
+    else if (before === '[]' || before === '[ ]') apply = function () { makeChecklist(false); };
+    else if (before === '[x]' || before === '[X]') apply = function () { makeChecklist(true); };
+    else return false;
+    var del = document.createRange();                       // remove the leading marker text
+    del.setStart(block, 0);
+    del.setEnd(r.startContainer, r.startOffset);
+    del.deleteContents();
+    block.normalize();
+    var cr = document.createRange();
+    cr.selectNodeContents(block); cr.collapse(true);
+    sel.removeAllRanges(); sel.addRange(cr);
+    apply();
+    onChange();
+    return true;
+  }
+
   /* ---------- Standard Notes integration ---------- */
   function loadContent(html, title) {
     editor.innerHTML = html || '<p><br></p>';
     normalizeBlocks();
     liftLists();
+    splitMultilineBlocks();             // legacy multi-line quotes → one numbered block per line
     styleTables();
     // Convert legacy indentation (margin-left) to the new padding-based --indent
     // so the current-line highlight reaches the left edge.
@@ -2029,14 +2758,19 @@
       if (ml > 0) { b.style.marginLeft = ''; setIndent(b, Math.max(1, Math.round(ml / 24))); }
     });
     ensureContent();
+    highlightAllCode();                 // re-tokenize any saved code blocks in the current theme
     lastSavedHTML = editor.innerHTML;
     if (title) stName.textContent = title;
+    setSaveState(false);
     refresh();
   }
   function save() {
     if (!componentRelay || !workingNote) return;
     var html = editor.innerHTML;
     lastSavedHTML = html;
+    setSaveState(true);
+    if (saveStateTimer) clearTimeout(saveStateTimer);
+    saveStateTimer = setTimeout(function () { setSaveState(false); }, 700);
     componentRelay.saveItemWithPresave(workingNote, function () {
       workingNote.content.text = html;
     });

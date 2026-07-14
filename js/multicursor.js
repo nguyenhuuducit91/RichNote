@@ -332,6 +332,7 @@
   var findBar = null, findInput = null, findCount = null, replaceInput = null;
   var matches = [];       // [{start:{node,off}, end:{node,off}}]
   var matchIndex = -1;
+  var optCase = false, optWord = false, optRegex = false;   // Find options (Aa / whole word / .*)
 
   /* All-match highlighting via the CSS Custom Highlight API (paints every match as you
      type — stays visible even while focus is in the Find input). Degrades gracefully:
@@ -370,6 +371,9 @@
           '<span class="mc-find-ico"><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></span>' +
           '<input type="text" class="mc-find-input" placeholder="Find in note…" spellcheck="false" />' +
           '<span class="mc-find-count">0/0</span>' +
+          '<button type="button" class="mc-find-opt" data-act="optCase" title="Match case">Aa</button>' +
+          '<button type="button" class="mc-find-opt" data-act="optWord" title="Whole word"><span class="mc-opt-word">ab</span></button>' +
+          '<button type="button" class="mc-find-opt" data-act="optRegex" title="Use regular expression">.*</button>' +
           '<span class="mc-find-sep"></span>' +
           '<button type="button" class="mc-find-btn" data-act="prev" title="Previous (Shift+Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button>' +
           '<button type="button" class="mc-find-btn" data-act="next" title="Next (Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>' +
@@ -402,9 +406,20 @@
     });
     findBar.addEventListener('mousedown', function (ev) {
       // keep the editor selection/caret when clicking buttons
-      if (ev.target.closest('.mc-find-btn, .mc-find-toggle')) ev.preventDefault();
+      if (ev.target.closest('.mc-find-btn, .mc-find-toggle, .mc-find-opt')) ev.preventDefault();
     });
     findBar.addEventListener('click', function (ev) {
+      var opt = ev.target.closest('.mc-find-opt');
+      if (opt) {
+        if (opt.dataset.act === 'optCase') optCase = !optCase;
+        else if (opt.dataset.act === 'optWord') optWord = !optWord;
+        else if (opt.dataset.act === 'optRegex') optRegex = !optRegex;
+        syncOptButtons();
+        computeMatches();
+        if (matches.length) gotoMatch(0); else paintCurrent();
+        findInput.focus();
+        return;
+      }
       var btn = ev.target.closest('.mc-find-btn, .mc-find-toggle'); if (!btn) return;
       var act = btn.dataset.act;
       if (act === 'next') gotoMatch(matchIndex + 1);
@@ -415,6 +430,13 @@
       else if (act === 'toggle') toggleReplace();
       else if (act === 'close') closeFind();
     });
+    syncOptButtons();
+  }
+  function syncOptButtons() {
+    if (!findBar) return;
+    var map = { optCase: optCase, optWord: optWord, optRegex: optRegex };
+    var btns = findBar.querySelectorAll('.mc-find-opt');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('active', !!map[btns[i].dataset.act]);
   }
 
   function toggleReplace(force) {
@@ -491,18 +513,48 @@
     while (n && n.parentNode !== editor) n = n.parentNode;
     return (n && n.parentNode === editor) ? n : null;
   }
+  // Build a RegExp from the query + the active options. Returns null (empty query) or
+  // the string 'error' (invalid regex the user is still typing).
+  function buildMatcher() {
+    var q = findInput ? findInput.value : '';
+    if (!q) return null;
+    var flags = optCase ? 'g' : 'gi';
+    if (optRegex) { try { return new RegExp(q, flags); } catch (e) { return 'error'; } }
+    var esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (optWord) esc = '(?:^|\\W)(' + esc + ')(?=\\W|$)';   // whole-word (no \b — matches non-ASCII too)
+    return { re: new RegExp(esc, flags), group: optWord ? 1 : 0 };
+  }
+  // Scan the flat text for [start, end] index pairs, honouring the options. null / 'error' pass through.
+  function scanMatches(text) {
+    var mk = buildMatcher();
+    if (!mk || mk === 'error') return mk;
+    var re = mk.re || mk, group = mk.group || 0;
+    var out = [], m, guard = 0;
+    re.lastIndex = 0;
+    while ((m = re.exec(text))) {
+      var whole = m[0], part = group ? m[group] : whole;
+      var start = m.index + (group ? whole.indexOf(part) : 0);
+      var end = start + part.length;
+      if (part.length === 0) { re.lastIndex = m.index + 1; if (re.lastIndex > text.length) break; }
+      else { out.push([start, end]); if (re.lastIndex <= start) re.lastIndex = end; }
+      if (++guard > 100000) break;
+    }
+    return out;
+  }
+  function setFindError(on) { if (findInput) findInput.classList.toggle('error', !!on); }
+
   function computeMatches() {
     matches = []; matchIndex = -1;
     var q = findInput ? findInput.value : '';
-    if (!q) { if (findCount) findCount.textContent = '0/0'; clearHighlights(); return; }
+    if (!q) { if (findCount) findCount.textContent = '0/0'; setFindError(false); clearHighlights(); return; }
     var idx = textIndex();
-    var hay = idx.text.toLowerCase(), needle = q.toLowerCase();
-    var from = 0, at;
-    while ((at = hay.indexOf(needle, from)) !== -1) {
-      var s = locateStart(at, idx.nodes), e = locateEnd(at + q.length, idx.nodes);
+    var found = scanMatches(idx.text);
+    if (found === 'error') { setFindError(true); if (findCount) findCount.textContent = '0/0'; clearHighlights(); return; }
+    setFindError(false);
+    for (var i = 0; i < found.length; i++) {
+      var s = locateStart(found[i][0], idx.nodes), e = locateEnd(found[i][1], idx.nodes);
       // Skip matches that would span two blocks (editing them could merge the blocks)
       if (s && e && topBlockOf(s.node) === topBlockOf(e.node)) matches.push({ s: s, e: e });
-      from = at + Math.max(1, q.length);
     }
     if (findCount) findCount.textContent = (matches.length ? 1 : 0) + '/' + matches.length;
     paintHighlights();   // highlight every match live as the user types
@@ -554,23 +606,23 @@
     var q = findInput ? findInput.value : '';
     if (!q) return;
     var repl = replaceInput ? replaceInput.value : '';
-    // Collect every match's GLOBAL start index up-front, then replace LAST → FIRST so
+    // Collect every match's GLOBAL [start,end] up-front, then replace LAST → FIRST so
     // earlier indices stay accurate; re-resolve (node, offset) from a fresh text map each
     // time so node splits/merges from execCommand can't invalidate a stale Range.
     var idx = textIndex();
-    var hay = idx.text.toLowerCase(), needle = q.toLowerCase();
-    var starts = [], from = 0, at;
-    while ((at = hay.indexOf(needle, from)) !== -1) {
-      var s = locateStart(at, idx.nodes), e = locateEnd(at + q.length, idx.nodes);
-      if (s && e && topBlockOf(s.node) === topBlockOf(e.node)) starts.push(at);
-      from = at + Math.max(1, q.length);
+    var found = scanMatches(idx.text);
+    if (!found || found === 'error' || !found.length) return;
+    var spans = [];
+    for (var i = 0; i < found.length; i++) {
+      var s = locateStart(found[i][0], idx.nodes), e = locateEnd(found[i][1], idx.nodes);
+      if (s && e && topBlockOf(s.node) === topBlockOf(e.node)) spans.push(found[i]);
     }
-    if (!starts.length) return;
+    if (!spans.length) return;
     editor.focus();
-    for (var i = starts.length - 1; i >= 0; i--) {
+    for (var j = spans.length - 1; j >= 0; j--) {
       var map = textIndex();
-      var ss = locateStart(starts[i], map.nodes);
-      var ee = locateEnd(starts[i] + q.length, map.nodes);
+      var ss = locateStart(spans[j][0], map.nodes);
+      var ee = locateEnd(spans[j][1], map.nodes);
       if (!ss || !ee) continue;
       var rr = document.createRange();
       rr.setStart(ss.node, ss.off); rr.setEnd(ee.node, ee.off);
