@@ -1105,18 +1105,40 @@
     highlightCode(cb, inside ? caretOffsetIn(codeTextEl(cb)) : null);
     onChange();
   });
+  // Copy text reliably. The async Clipboard API is frequently blocked inside Standard
+  // Notes' iframe/Electron sandbox (no permission / not focused), so copy via a temporary
+  // <textarea> + execCommand('copy') first, and only fall back to the async API.
+  function copyPlainText(text) {
+    var ok = false;
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;';
+      document.body.appendChild(ta);
+      var sel = window.getSelection();
+      var prev = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange() : null;
+      ta.focus(); ta.select();
+      try { ta.setSelectionRange(0, ta.value.length); } catch (e) {}
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (prev) { sel.removeAllRanges(); sel.addRange(prev); }
+    } catch (e) { ok = false; }
+    if (!ok && navigator.clipboard && navigator.clipboard.writeText) {
+      try { navigator.clipboard.writeText(text); ok = true; } catch (e2) {}
+    }
+    return ok;
+  }
+  // Keep the current selection/focus when pressing the copy button
+  if (codeCopy) codeCopy.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
   if (codeCopy) codeCopy.addEventListener('click', function () {
     var cb = activeCodeBlock();
     if (!cb) return;
-    var text = codeSrc(cb);
+    var ok = copyPlainText(codeSrc(cb));
     var lbl = codeCopy.querySelector('.code-copy-label');
-    var done = function () {
-      codeCopy.classList.add('copied');
-      if (lbl) lbl.textContent = 'Copied';
-      setTimeout(function () { codeCopy.classList.remove('copied'); if (lbl) lbl.textContent = 'Copy'; }, 1200);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, done);
-    else done();
+    codeCopy.classList.toggle('copied', ok);
+    if (lbl) lbl.textContent = ok ? 'Copied' : 'Failed';
+    setTimeout(function () { codeCopy.classList.remove('copied'); if (lbl) lbl.textContent = 'Copy'; }, 1200);
   });
 
   // Position the fixed popup right below its button so the toolbar overflow can't clip it
