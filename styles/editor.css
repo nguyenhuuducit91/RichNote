@@ -870,6 +870,31 @@ a.about-row:hover { background: var(--np-accent-soft); }
   position: relative;              /* anchor the Find bar */
 }
 
+/* Raw HTML source view — hidden until View ▸ HTML source is toggled on */
+.source-view {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  outline: none;
+  resize: none;
+  padding: var(--np-pad-y) 16px 40px;
+  background: var(--np-bg);
+  color: var(--np-fg);
+  font-family: var(--np-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+}
+/* While editing source, the gutter/minimap/code-bar are meaningless — hide them */
+.source-mode .gutter,
+.source-mode .code-bar,
+.source-mode .minimap { display: none !important; }
+
 /* Line-number gutter — numbers are absolutely positioned by each block's offsetTop */
 .gutter {
   flex: 0 0 auto;

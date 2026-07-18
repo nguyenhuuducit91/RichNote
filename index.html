@@ -91,6 +91,8 @@
         <div class="menu-dropdown">
           <button class="menu-item" type="button" data-cmd="wrap" id="wrapItem"><span class="menu-check">✓</span><span class="menu-label">Word Wrap</span><span class="menu-key"></span></button>
           <button class="menu-item" type="button" data-cmd="minimap" id="minimapItem"><span class="menu-check">✓</span><span class="menu-label">Minimap</span><span class="menu-key"></span></button>
+          <div class="menu-sep"></div>
+          <button class="menu-item" type="button" data-cmd="source" id="sourceItem"><span class="menu-check"></span><span class="menu-label">HTML source</span><span class="menu-key"></span></button>
         </div>
       </div>
 
@@ -295,6 +297,9 @@
       <div id="editor" class="doc" contenteditable="true" spellcheck="false"
            role="textbox" aria-multiline="true" aria-label="Note content"
            data-placeholder="Start writing…"></div>
+      <!-- Raw HTML source view: editable, pretty-printed; toggled from View ▸ HTML source -->
+      <textarea id="sourceView" class="source-view" spellcheck="false" autocomplete="off"
+                autocapitalize="off" wrap="off" aria-label="HTML source"></textarea>
       <!-- Code-block toolbar: language picker + copy, revealed on hover over a code block -->
       <div class="code-bar" id="codeBar" aria-hidden="true">
         <select class="code-lang" id="codeLang" title="Code language"></select>
@@ -321,7 +326,7 @@
       <div class="about-hero">
         <div class="about-logo"><img src="img/icon.svg" alt="RichNote" /></div>
         <h2 class="about-title">Rich Note</h2>
-        <span class="about-ver" id="aboutVer">v1.2.0</span>
+        <span class="about-ver" id="aboutVer">v1.3.0</span>
         <p class="about-tagline">A beautiful WYSIWYG editor for Standard Notes</p>
       </div>
 

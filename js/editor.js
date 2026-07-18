@@ -56,6 +56,7 @@
   var codeBar     = document.getElementById('codeBar');
   var codeLang    = document.getElementById('codeLang');
   var codeCopy    = document.getElementById('codeCopy');
+  var sourceView  = document.getElementById('sourceView');
 
   /* Default color palette (Google Sheets style) */
   var PALETTE = [
@@ -170,6 +171,39 @@
     }
     wrapInlineRunsAsBlocks();
   }
+  // A block that (illegally) contains other block-level elements — e.g. pasting several
+  // <p> lines while the caret sits inside an <h3> yields <h3><p>…</p><p>…</p></h3>, which
+  // breaks the one-block-per-line model and line numbering. Lift every nested block out to
+  // the editor's top level: inline runs stay in a clone of the wrapper (a heading keeps its
+  // tag), and each nested block becomes its own top-level line. Runs until nothing is nested.
+  var CHILD_BLOCK_RE = /^(P|DIV|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|PRE|UL|OL|TABLE|HR)$/;
+  function hasDirectBlockChild(el) {
+    for (var i = 0; i < el.children.length; i++) if (CHILD_BLOCK_RE.test(el.children[i].tagName)) return true;
+    return false;
+  }
+  function flattenNestedBlocks() {
+    for (var pass = 0; pass < 20; pass++) {
+      var kids = Array.prototype.slice.call(editor.children), didWork = false;
+      for (var i = 0; i < kids.length; i++) {
+        var k = kids[i];
+        if (k.nodeType !== 1 || !LIFT_RE.test(k.tagName) || !hasDirectBlockChild(k)) continue;
+        var pieces = [], seg = null;
+        Array.prototype.slice.call(k.childNodes).forEach(function (c) {
+          if (c.nodeType === 1 && CHILD_BLOCK_RE.test(c.tagName)) { seg = null; pieces.push(c); }
+          else if (c.nodeType === 1 && c.tagName === 'BR') { seg = null; }        // break → new segment
+          else { if (!seg) { seg = k.cloneNode(false); seg.removeAttribute('class'); pieces.push(seg); } seg.appendChild(c); }
+        });
+        for (var p = 0; p < pieces.length; p++) {
+          var pc = pieces[p], isBlk = pc.nodeType === 1 && CHILD_BLOCK_RE.test(pc.tagName);
+          if (!isBlk && !/\S/.test(pc.textContent) && !pc.querySelector('img')) continue;  // drop empty clones
+          editor.insertBefore(pc, k);
+        }
+        editor.removeChild(k);
+        didWork = true;
+      }
+      if (!didWork) break;
+    }
+  }
   function ensureContent() {
     if (editor.children.length === 0) editor.innerHTML = '<p><br></p>';
   }
@@ -245,6 +279,7 @@
       }).join('');
       document.execCommand('insertHTML', false, html);
       stripSpuriousBg();
+      absorbLeadingTabs();            // leading \t on a pasted line → editor indent
     }
     onChange();
   }
@@ -342,7 +377,9 @@
     stripSpuriousBg();
     normalizeBlocks();
     liftLists();
+    flattenNestedBlocks();              // e.g. <h3><p>…</p></h3> from pasting into a heading
     splitMultilineBlocks();             // one block per line for pasted multi-line quotes
+    absorbLeadingTabs();                // leading \t → editor indent (mid-line tabs untouched)
     styleTables();
     ensureContent();
     highlightAllCode();                 // colour any pasted code blocks
@@ -732,9 +769,8 @@
     setActive('wrap', wrapOn);
     if (wrapItem) wrapItem.classList.toggle('checked', wrapOn);
 
-    // Disable Undo/Redo when there is nothing to undo/redo
-    try { setEnabled('undo', document.queryCommandEnabled('undo')); } catch (e) {}
-    try { setEnabled('redo', document.queryCommandEnabled('redo')); } catch (e) {}
+    // Disable Undo/Redo when there is nothing to undo/redo (driven by our own history)
+    updateHistButtons();
 
     // Sync the paragraph-style select: the shared style, or blank when the lines are mixed.
     styleSelect.value = style;   // '' (no option) shows blank for a mixed selection
@@ -796,8 +832,127 @@
     updateEmptyState();
   }
 
-  function onChange() { refresh(); save(); }
-  editor.addEventListener('input', onChange);
+  /* ---------- Undo / redo history ----------
+     Native execCommand('undo') only tracks edits made THROUGH execCommand, so the many
+     DIRECT DOM mutations here (indent padding, tables, code blocks, checklist toggles,
+     line moves…) bypassed it — undo was unreliable and a multi-line indent couldn't be
+     undone at all. This is a self-contained stack of {html, selection} snapshots: a burst
+     of typing coalesces into one entry, and every discrete command records exactly one
+     entry, so a single Ctrl+Z reverts a whole multi-line Tab / indent / paste at once. */
+  var histStack = [], histIdx = -1, histTimer = null, histLock = false;
+  var HIST_MAX = 300, HIST_DELAY = 350;
+
+  function histNodePath(node) {
+    if (!node || !editor.contains(node)) return null;
+    var path = [], n = node;
+    while (n && n !== editor) {
+      var p = n.parentNode;
+      path.unshift(Array.prototype.indexOf.call(p.childNodes, n));
+      n = p;
+    }
+    return path;
+  }
+  function histResolve(path) {
+    if (!path) return null;
+    var n = editor;
+    for (var i = 0; i < path.length; i++) {
+      if (!n.childNodes || path[i] < 0 || path[i] >= n.childNodes.length) return null;
+      n = n.childNodes[path[i]];
+    }
+    return n;
+  }
+  function histSaveSel() {
+    var s = window.getSelection();
+    if (!s.rangeCount || !editor.contains(s.anchorNode)) return null;
+    return { ap: histNodePath(s.anchorNode), ao: s.anchorOffset,
+             fp: histNodePath(s.focusNode),  fo: s.focusOffset };
+  }
+  function histRestoreSel(sel) {
+    if (!sel) return;
+    var an = histResolve(sel.ap), fn = histResolve(sel.fp), fo = sel.fo;
+    if (!an) return;
+    if (!fn) { fn = an; fo = sel.ao; }
+    var maxA = an.nodeType === 3 ? an.nodeValue.length : an.childNodes.length;
+    var maxF = fn.nodeType === 3 ? fn.nodeValue.length : fn.childNodes.length;
+    var s = window.getSelection();
+    try {
+      var r = document.createRange();
+      r.setStart(an, Math.min(sel.ao, maxA));
+      r.setEnd(fn, Math.min(fo, maxF));
+      s.removeAllRanges(); s.addRange(r);
+    } catch (e) {
+      try {                                    // reversed range → fall back to a collapsed caret
+        var r2 = document.createRange();
+        r2.setStart(an, Math.min(sel.ao, maxA)); r2.collapse(true);
+        s.removeAllRanges(); s.addRange(r2);
+      } catch (e2) {}
+    }
+  }
+  // Strip purely-visual state (current-line highlight, cell-selection) so snapshots compare
+  // by CONTENT only — moving the caret to another line must not create a bogus undo entry.
+  // These are class tokens, so removing them never changes node structure → saved selection
+  // paths still resolve after a restore.
+  function histClean(html) {
+    return html.replace(/\s*\b(?:current-line|rn-cell-sel)\b/g, '').replace(/\sclass=""/g, '');
+  }
+  function histCommit() {
+    if (histLock) return;
+    var html = histClean(editor.innerHTML);
+    if (histIdx >= 0 && histStack[histIdx].html === html) {
+      histStack[histIdx].sel = histSaveSel();       // refresh the caret, no new entry
+      return;
+    }
+    histStack.length = histIdx + 1;                 // drop any redo tail
+    histStack.push({ html: html, sel: histSaveSel() });
+    if (histStack.length > HIST_MAX) histStack.shift();
+    histIdx = histStack.length - 1;
+    updateHistButtons();
+  }
+  function histCommitDebounced() {
+    if (histTimer) clearTimeout(histTimer);
+    histTimer = setTimeout(function () { histTimer = null; histCommit(); }, HIST_DELAY);
+  }
+  function histFlush() { if (histTimer) { clearTimeout(histTimer); histTimer = null; histCommit(); } }
+  function histReset() {
+    if (histTimer) { clearTimeout(histTimer); histTimer = null; }
+    histStack = [{ html: histClean(editor.innerHTML), sel: histSaveSel() }];
+    histIdx = 0;
+    updateHistButtons();
+  }
+  function histApply(entry) {
+    histLock = true;
+    editor.focus();
+    editor.innerHTML = entry.html;
+    histRestoreSel(entry.sel);
+    histLock = false;
+    highlightAllCode();                             // re-attach live code-block colouring
+    refresh();
+    save();
+    updateHistButtons();
+  }
+  function undo() {
+    histFlush();
+    histCommit();                                   // pin the latest edit as the top of the stack
+    if (histIdx <= 0) return;
+    histIdx--;
+    histApply(histStack[histIdx]);
+  }
+  function redo() {
+    histFlush();
+    if (histIdx >= histStack.length - 1) return;
+    histIdx++;
+    histApply(histStack[histIdx]);
+  }
+  function updateHistButtons() {
+    setEnabled('undo', histIdx > 0);
+    setEnabled('redo', histIdx >= 0 && histIdx < histStack.length - 1);
+  }
+
+  function onChange() { if (!histLock) histCommit(); refresh(); save(); }
+  editor.addEventListener('input', function () {
+    if (!histLock) histCommitDebounced();
+    refresh(); save();
+  });
 
   document.addEventListener('selectionchange', function () {
     var sel = window.getSelection();
@@ -1303,6 +1458,34 @@
     if (changed) onChange();
   }
 
+  // Convert LEADING tab characters (at the very start of a line) into the editor's own
+  // padding indent, so pasted/loaded text that was indented with literal tabs adopts the
+  // clean, uniform indent step. Tabs in the MIDDLE of a line (column separators like
+  // "Super⇥Mở tìm kiếm") are left untouched. Code blocks keep their tabs verbatim.
+  function absorbLeadingTabsIn(block) {
+    var walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+    var tn = walker.nextNode();
+    if (!tn) return;
+    var m = /^\t+/.exec(tn.nodeValue);
+    if (!m) return;
+    tn.nodeValue = tn.nodeValue.slice(m[0].length);
+    var cur = parseInt(block.getAttribute('data-indent'), 10) || 0;
+    setIndent(block, Math.min(cur + m[0].length, 20));
+  }
+  function absorbLeadingTabs() {
+    var kids = editor.children;
+    for (var i = 0; i < kids.length; i++) {
+      var b = kids[i];
+      if (b.nodeType !== 1) continue;
+      if (b.tagName === 'UL' || b.tagName === 'OL') {
+        var lis = b.querySelectorAll('li');
+        for (var j = 0; j < lis.length; j++) absorbLeadingTabsIn(lis[j]);
+      } else if (b.tagName !== 'PRE') {              // never touch code-block indentation
+        absorbLeadingTabsIn(b);
+      }
+    }
+  }
+
   function clearFormat() {
     document.execCommand('removeFormat');
     var blocks = selectedBlocks();
@@ -1453,6 +1636,123 @@
     editor.classList.toggle('wrap', wrapOn);
     try { localStorage.setItem('richnote-wrap', wrapOn ? '1' : '0'); } catch (e) {}
     refresh();
+  }
+
+  /* ---------- View / edit HTML source ----------
+     A togglable raw-HTML view. The document's HTML is pretty-printed (one block per line,
+     nested/indented) so it reads cleanly instead of one giant minified line; edits made in
+     the textarea are parsed back into the live document when the view is turned off. */
+  var SRC_INLINE = { A:1, ABBR:1, B:1, BDI:1, BDO:1, BR:1, CITE:1, CODE:1, DATA:1, DEL:1,
+    DFN:1, EM:1, FONT:1, I:1, IMG:1, INS:1, KBD:1, LABEL:1, MARK:1, Q:1, S:1, SAMP:1, SMALL:1,
+    SPAN:1, STRIKE:1, STRONG:1, SUB:1, SUP:1, TIME:1, U:1, VAR:1, WBR:1 };
+  var SRC_VOID = { AREA:1, BASE:1, BR:1, COL:1, EMBED:1, HR:1, IMG:1, INPUT:1, LINK:1,
+    META:1, PARAM:1, SOURCE:1, TRACK:1, WBR:1 };
+  var SRC_VERBATIM = { PRE:1 };   // never reflow the inside of a code block
+
+  function srcOpenTag(el) {
+    var s = '<' + el.tagName.toLowerCase(), attrs = el.attributes;
+    for (var i = 0; i < attrs.length; i++) {
+      s += ' ' + attrs[i].name + '="' +
+        String(attrs[i].value).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"';
+    }
+    return s + '>';
+  }
+  function srcHasBlockChild(el) {
+    for (var i = 0; i < el.children.length; i++) {
+      if (!SRC_INLINE[el.children[i].tagName]) return true;
+    }
+    return false;
+  }
+  // Pretty-print HTML: block elements each on their own indented line, inline runs kept
+  // whole on the parent's line so words/formatting aren't split.
+  function formatHtml(html) {
+    var root = document.createElement('div');
+    root.innerHTML = String(html || '');
+    var out = [];
+    function pad(d) { return new Array(d + 1).join('  '); }
+    function walk(parent, depth) {
+      var nodes = parent.childNodes;
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (n.nodeType === 3) {                                   // text
+          if (!/\S/.test(n.nodeValue)) continue;                  // ignore layout whitespace
+          out.push(pad(depth) + escapeHtml(n.nodeValue.replace(/\s+/g, ' ').trim()));
+        } else if (n.nodeType === 8) {                            // comment
+          out.push(pad(depth) + '<!--' + n.nodeValue + '-->');
+        } else if (n.nodeType === 1) {                            // element
+          var tag = n.tagName;
+          if (SRC_VOID[tag]) { out.push(pad(depth) + srcOpenTag(n)); continue; }
+          var close = '</' + tag.toLowerCase() + '>';
+          if (SRC_VERBATIM[tag] || !srcHasBlockChild(n)) {        // keep inline content on one line
+            out.push(pad(depth) + srcOpenTag(n) + n.innerHTML.trim() + close);
+          } else {
+            out.push(pad(depth) + srcOpenTag(n));
+            walk(n, depth + 1);
+            out.push(pad(depth) + close);
+          }
+        }
+      }
+    }
+    walk(root, 0);
+    return out.join('\n');
+  }
+  // Drop the newline+indent whitespace the pretty-printer added between BLOCK elements,
+  // without touching whitespace that sits next to inline content (where it is meaningful)
+  // or inside <pre>/<code>.
+  function stripPrettyWhitespace(root) {
+    var kill = [];
+    (function walk(node) {
+      for (var i = 0; i < node.childNodes.length; i++) {
+        var n = node.childNodes[i];
+        if (n.nodeType === 1) {
+          if (n.tagName !== 'PRE' && n.tagName !== 'CODE') walk(n);
+        } else if (n.nodeType === 3 && !/\S/.test(n.nodeValue)) {
+          var prev = n.previousSibling, next = n.nextSibling;
+          var prevOK = !prev || (prev.nodeType === 1 && !SRC_INLINE[prev.tagName]);
+          var nextOK = !next || (next.nodeType === 1 && !SRC_INLINE[next.tagName]);
+          if (prevOK && nextOK) kill.push(n);
+        }
+      }
+    })(root);
+    for (var k = 0; k < kill.length; k++) if (kill[k].parentNode) kill[k].parentNode.removeChild(kill[k]);
+  }
+
+  var sourceOn = false;
+  function applySource() {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = sourceView.value;
+    stripPrettyWhitespace(tmp);
+    editor.innerHTML = tmp.innerHTML;
+    normalizeBlocks();
+    liftLists();
+    flattenNestedBlocks();
+    splitMultilineBlocks();
+    absorbLeadingTabs();
+    styleTables();
+    ensureContent();
+    highlightAllCode();
+    onChange();                     // records one undo entry for the whole source edit
+  }
+  function setSourceView(on) {
+    sourceOn = on;
+    document.body.classList.toggle('source-mode', on);
+    setActive('source', on);
+    var item = document.querySelector('.menu-item[data-cmd="source"] .menu-check');
+    if (item) item.textContent = on ? '✓' : '';
+    if (on) {
+      sourceView.value = formatHtml(editor.innerHTML);
+      editor.style.display = 'none';
+      sourceView.style.display = 'block';
+      sourceView.focus();
+    } else {
+      sourceView.style.display = 'none';
+      editor.style.display = '';
+      editor.focus();
+    }
+  }
+  function toggleSource() {
+    if (sourceOn) { applySource(); setSourceView(false); }
+    else setSourceView(true);
   }
 
   /* ============================================================
@@ -1943,8 +2243,8 @@
     if (MC_FMT[cmd] && mcActive()) { window.__richnoteMC.run(function () { rawFormat(cmd); }); return; }
     if (REPEATABLE[cmd]) lastAction = (function (c) { return function () { exec(c); }; })(cmd);
     switch (cmd) {
-      case 'undo':      document.execCommand('undo'); break;
-      case 'redo':      document.execCommand('redo'); break;
+      case 'undo':      undo(); return;
+      case 'redo':      redo(); return;
       case 'cut':       document.execCommand('cut'); break;
       case 'copy':      document.execCommand('copy'); break;
       case 'paste':       doPaste(); return;
@@ -1985,6 +2285,7 @@
       case 'clear':     clearFormat(); return;
       case 'formatPainter': fpArm(false); return;
       case 'wrap':      toggleWrap(); return;
+      case 'source':    toggleSource(); return;
       case 'minimap':   if (window.__richnoteMinimap) window.__richnoteMinimap.toggle(); return;
       case 'find':        if (window.__richnoteFind) window.__richnoteFind.open(); return;
       case 'findReplace': if (window.__richnoteFind) window.__richnoteFind.openReplace(); return;
@@ -2363,6 +2664,62 @@
   });
 
   /* ---------- Paste: keep formatting when available, else each line -> a block ---------- */
+  /* ---------- Copy / Cut ----------
+     The browser's default copy sometimes drops the block structure (multi-paragraph copies
+     collapse into one line when pasted, and editor-only classes like current-line leak into
+     the clipboard). We build the payload ourselves: clean HTML with every loose line wrapped
+     in its own <p> (so lines never merge on paste), plus a block-structured text/plain
+     fallback (one line per block) for plain-text targets. */
+  function wrapLooseInline(box) {
+    var run = null, nodes = Array.prototype.slice.call(box.childNodes);
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      var isBlock = n.nodeType === 1 && !SRC_INLINE[n.tagName];
+      if (isBlock) { run = null; continue; }
+      if (n.nodeType === 3 && !/\S/.test(n.nodeValue) && !run) { box.removeChild(n); continue; }
+      if (!run) { run = document.createElement('p'); box.insertBefore(run, n); }
+      run.appendChild(n);
+    }
+  }
+  function buildCopyPayload(range) {
+    var box = document.createElement('div');
+    box.appendChild(range.cloneContents());
+    var cl = box.querySelectorAll('.current-line');
+    for (var i = 0; i < cl.length; i++) cl[i].classList.remove('current-line');
+    // The editor's indent is a BLOCK attribute (data-indent/--indent), which the clipboard
+    // drops. Bake it back into leading tab characters so the indentation travels with the
+    // text (and any plain-text target keeps it); a paste back re-absorbs the tabs as indent.
+    var ind = box.querySelectorAll('[data-indent]');
+    for (var d = 0; d < ind.length; d++) {
+      var lvl = parseInt(ind[d].getAttribute('data-indent'), 10) || 0;
+      if (lvl > 0) ind[d].insertBefore(document.createTextNode(new Array(lvl + 1).join('\t')), ind[d].firstChild);
+      ind[d].removeAttribute('data-indent');
+      ind[d].style.removeProperty('--indent');
+      if (!ind[d].getAttribute('style')) ind[d].removeAttribute('style');
+    }
+    wrapLooseInline(box);                       // loose inline runs → one <p> per line
+    var lines = [];
+    collectLines(box, lines);                   // one plain line per block
+    var text = lines.length ? lines.join('\n') : box.textContent;
+    return { html: box.innerHTML, text: text };
+  }
+  function onCopyEvent(ev, isCut) {
+    if (hasCellSel()) return;                    // multi-cell selection: leave to default copy
+    var sel = window.getSelection();
+    if (!sel.rangeCount || sel.isCollapsed || !editor.contains(sel.anchorNode)) return;
+    var cd = ev.clipboardData || window.clipboardData;
+    if (!cd) return;
+    var payload = buildCopyPayload(sel.getRangeAt(0));
+    try {
+      cd.setData('text/html', payload.html);
+      cd.setData('text/plain', payload.text);
+    } catch (e) { return; }                      // couldn't set → fall back to the browser default
+    ev.preventDefault();
+    if (isCut) { document.execCommand('delete'); onChange(); }
+  }
+  editor.addEventListener('copy', function (ev) { onCopyEvent(ev, false); });
+  editor.addEventListener('cut',  function (ev) { onCopyEvent(ev, true); });
+
   editor.addEventListener('paste', function (ev) {
     if (pasteOverrideTimer) { clearTimeout(pasteOverrideTimer); pasteOverrideTimer = null; }
     var mode = pasteOverride; pasteOverride = null;   // 'plain' / 'format' / null (default)
@@ -2454,10 +2811,11 @@
         onChange();
         return;
       }
-      var blocks = selectedBlocks();
+      // Indent by the SAME padding step whether one line or many are selected (a literal
+      // '\t' rendered ~4 chars wide, so a single-line Tab used to jump further than a
+      // multi-line one). A whole multi-line indent is a single undo step.
       if (ev.shiftKey) outdentSelection();               // outdent: padding OR leading spaces/tab
-      else if (blocks.length > 1) indentBlocks(1);
-      else document.execCommand('insertText', false, '\t');
+      else indentBlocks(1);
       return;
     }
 
@@ -2492,7 +2850,7 @@
       else if (c === 'Comma') changeFontSize(-1);     // Ctrl+Shift+,  decrease font size
       else if (c === 'KeyD') duplicateLine();         // Ctrl+Shift+D  duplicate line
       else if (c === 'KeyK') deleteLine();            // Ctrl+Shift+K  delete line
-      else if (c === 'KeyZ') { document.execCommand('redo'); onChange(); }
+      else if (c === 'KeyZ') redo();                  // Ctrl+Shift+Z  redo
       else handled = false;
     } else {
       if (c === 'KeyL') exec('left');
@@ -2503,7 +2861,8 @@
       else if (c === 'KeyK') exec('link');
       else if (c === 'KeyH') exec('findReplace');     // Ctrl+H  Find & Replace
       else if (c === 'Backslash') exec('clear');
-      else if (c === 'KeyY') { document.execCommand('redo'); onChange(); }
+      else if (c === 'KeyZ') undo();                  // Ctrl+Z  undo
+      else if (c === 'KeyY') redo();                  // Ctrl+Y  redo
       // With a multi-cell or discontiguous (Ctrl+drag) selection, route Ctrl+B/I/U through
       // exec so the format hits every cell/range (else the browser only affects the caret).
       else if (c === 'KeyB' && (hasCellSel() || mcActive())) exec('bold');
@@ -2771,7 +3130,9 @@
     editor.innerHTML = html || '<p><br></p>';
     normalizeBlocks();
     liftLists();
+    flattenNestedBlocks();              // repair any block-nested-in-block from older saves
     splitMultilineBlocks();             // legacy multi-line quotes → one numbered block per line
+    absorbLeadingTabs();                // leading \t → editor indent (mid-line tabs untouched)
     styleTables();
     // Convert legacy indentation (margin-left) to the new padding-based --indent
     // so the current-line highlight reaches the left edge.
@@ -2784,6 +3145,7 @@
     lastSavedHTML = editor.innerHTML;
     if (title) stName.textContent = title;
     setSaveState(false);
+    histReset();                        // a freshly loaded note starts a new undo history
     refresh();
   }
   function save() {
@@ -2847,6 +3209,7 @@
   try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
   applyToolbar();
   ensureContent();
+  histReset();                          // seed the undo history with the initial content
   connectStandardNotes();
   refresh();
 })();
