@@ -301,7 +301,7 @@
   /* ---------- Formatted paste (keep bold/colors/links) with sanitising ---------- */
   var PASTE_TAGS = { P:1, DIV:1, BR:1, HR:1, SPAN:1, B:1, STRONG:1, I:1, EM:1, U:1, S:1, STRIKE:1, DEL:1,
     MARK:1, CODE:1, PRE:1, A:1, H1:1, H2:1, H3:1, H4:1, H5:1, H6:1, UL:1, OL:1, LI:1, BLOCKQUOTE:1, FONT:1, SUB:1, SUP:1,
-    TABLE:1, THEAD:1, TBODY:1, TFOOT:1, TR:1, TD:1, TH:1, CAPTION:1, COLGROUP:1, COL:1 };
+    IMG:1, TABLE:1, THEAD:1, TBODY:1, TFOOT:1, TR:1, TD:1, TH:1, CAPTION:1, COLGROUP:1, COL:1 };
   var STYLE_KEEP = ['color', 'background-color', 'font-weight', 'font-style',
     'text-decoration', 'text-decoration-line', 'font-size', 'font-family', 'text-align',
     'width', 'height', 'table-layout', 'vertical-align'];
@@ -324,8 +324,16 @@
     var comments = [], cm;
     while ((cm = walker.nextNode())) comments.push(cm);
     for (var ci = 0; ci < comments.length; ci++) if (comments[ci].parentNode) comments[ci].parentNode.removeChild(comments[ci]);
-    var drop = box.querySelectorAll('script,style,meta,link,title,head,object,embed,iframe,noscript,input,button,form,svg,img');
+    var drop = box.querySelectorAll('script,style,meta,link,title,head,object,embed,iframe,noscript,input,button,form,svg');
     for (var d = 0; d < drop.length; d++) if (drop[d].parentNode) drop[d].parentNode.removeChild(drop[d]);
+    // Keep only EMBEDDED images (data: URIs) — drop external/hotlinked/js images for privacy
+    // and offline reliability. Screenshots pasted as files arrive as data: URIs (see below).
+    var imgs = box.querySelectorAll('img');
+    for (var im = 0; im < imgs.length; im++) {
+      if (!/^data:image\//i.test(imgs[im].getAttribute('src') || '') && imgs[im].parentNode) {
+        imgs[im].parentNode.removeChild(imgs[im]);
+      }
+    }
     var els = box.querySelectorAll('*');
     for (var j = els.length - 1; j >= 0; j--) {          // reverse: unwrap children before parents
       var el = els[j];
@@ -340,6 +348,8 @@
         var name = attrs[k].name.toLowerCase();
         if (name === 'href' && el.tagName === 'A') {
           if (/^\s*javascript:/i.test(attrs[k].value)) el.removeAttribute('href');
+        } else if (el.tagName === 'IMG' && (name === 'src' || name === 'alt' || name === 'width' || name === 'height')) {
+          if (name === 'src' && !/^data:image\//i.test(attrs[k].value)) el.removeAttribute('src');   // embedded only
         } else if (name === 'color' && el.tagName === 'FONT') {
           el.style.color = attrs[k].value; el.removeAttribute('color');
         } else if (name === 'style') {
@@ -563,6 +573,14 @@
         for (var cl = 0; cl < nLines; cl++) lines.push({ top: base + cl * lh, lh: lh, active: cl === activeLine });
         continue;
       }
+      // A horizontal rule has big symmetric margins and ~no height; its number belongs
+      // CENTERED on the rule, not offset by the margin (which used to shove it onto the
+      // next line's number). offsetTop already sits past the top margin — don't add it again.
+      if (b.tagName === 'HR') {
+        var hlh = 20;
+        lines.push({ top: b.offsetTop + b.offsetHeight / 2 - hlh / 2, lh: hlh, active: false });
+        continue;
+      }
       var top = b.offsetTop + (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.marginTop) || 0);
       var key = Math.round(top);
       if (seen[key] === undefined) { seen[key] = lines.length; lines.push({ top: top, lh: lh, active: false }); }
@@ -640,10 +658,12 @@
       gutterSyncRaf = false;
       syncGutterScroll();
       if (codeBarFor && codeBar && codeBar.classList.contains('show')) positionCodeBar(codeBarFor);
+      if (typeof positionImgHandle === 'function') positionImgHandle();   // keep the resize handle glued
     });
   }, { passive: true });
   window.addEventListener('resize', function () {
     if (codeBarFor && codeBar && codeBar.classList.contains('show')) positionCodeBar(codeBarFor);
+    if (typeof positionImgHandle === 'function') positionImgHandle();
   });
 
   /* ---------- Toolbar button states ---------- */
@@ -684,14 +704,14 @@
     if (opt) opt.classList.toggle('active', !!on);
   }
   var ALIGN_ICONS = {
-    left:    '<svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h12"/></svg>',
-    center:  '<svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M4 8h8M2 12h12"/></svg>',
-    right:   '<svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M6 8h8M2 12h12"/></svg>',
-    justify: '<svg class="ico" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12"/></svg>'
+    left:    '<svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M2 4h12M2 8h8M2 12h12"/></svg>',
+    center:  '<svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M2 4h12M4 8h8M2 12h12"/></svg>',
+    right:   '<svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M2 4h12M6 8h8M2 12h12"/></svg>',
+    justify: '<svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12"/></svg>'
   };
   var LIST_ICONS = {
-    ul: '<svg class="ico" viewBox="0 0 16 16"><circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/></svg>',
-    ol: '<svg class="ico" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text></svg>'
+    ul: '<svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><circle class="dot" cx="2.6" cy="4" r="1.1"/><circle class="dot" cx="2.6" cy="8" r="1.1"/><circle class="dot" cx="2.6" cy="12" r="1.1"/><path d="M6 4h8M6 8h8M6 12h8"/></svg>',
+    ol: '<svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8"/><text x="0.4" y="5.6">1</text><text x="0.4" y="9.6">2</text><text x="0.4" y="13.6">3</text></svg>'
   };
   function currentAlign() {
     if (q('justifyCenter')) return 'center';
@@ -833,6 +853,23 @@
     updateTableTool(topCur);
     if (cellSel.length && !dragging && topCur !== cellSelTable) clearCellSel();
     updateEmptyState();
+    if (selectedImg) { if (!editor.contains(selectedImg)) deselectImage(); else positionImgHandle(); }
+    watchImages();
+  }
+  // Images (esp. freshly loaded data: URIs) have NO size until they decode, so a gutter drawn
+  // right after opening a note measures them as 0-height → the line numbers bunch up over the
+  // picture. Re-draw the gutter once each image finishes loading so the numbers land right.
+  function onImgDecoded() { renderGutter(currentLineUnit()); }
+  function watchImages() {
+    var imgs = editor.getElementsByTagName('img');
+    for (var i = 0; i < imgs.length; i++) {
+      var im = imgs[i];
+      if (im.__rnWatched) continue;
+      im.__rnWatched = true;
+      if (im.complete && im.naturalWidth) continue;   // already sized — nothing to wait for
+      im.addEventListener('load', onImgDecoded);
+      im.addEventListener('error', onImgDecoded);
+    }
   }
 
   /* ---------- Undo / redo history ----------
@@ -1747,6 +1784,7 @@
     if (btn) btn.title = on ? 'Back to editor (Esc)' : 'HTML source — edit the raw HTML';
     var mode = document.querySelector('.st-mode');
     if (mode) mode.textContent = on ? 'HTML' : 'RTF';
+    setSourceControlsInert(on);
     if (on) {
       sourceOrig = formatHtml(editor.innerHTML);
       sourceView.value = sourceOrig;
@@ -1777,8 +1815,13 @@
     sourceHl.scrollTop = sourceView.scrollTop;
     sourceHl.scrollLeft = sourceView.scrollLeft;
   }
+  var sourceSaveTimer = null;
+  function scheduleSourceSave() {
+    if (sourceSaveTimer) clearTimeout(sourceSaveTimer);
+    sourceSaveTimer = setTimeout(function () { sourceSaveTimer = null; if (sourceOn) save(); }, 600);
+  }
   if (sourceView) {
-    sourceView.addEventListener('input', renderSourceHL);
+    sourceView.addEventListener('input', function () { renderSourceHL(); scheduleSourceSave(); });
     sourceView.addEventListener('scroll', syncSourceScroll);
   }
   function toggleSource() {
@@ -1786,6 +1829,20 @@
       if (sourceView.value !== sourceOrig) applySource();     // only re-parse if actually edited
       setSourceView(false);
     } else setSourceView(true);
+  }
+  // a11y: the controls the CSS dims in source mode must also be inert for keyboard/AT users
+  // (announced disabled, skipped in Tab order). The Source toggle + Help stay reachable.
+  var SRC_KEEP_CMDS = { source: 1, about: 1, donate: 1, shortcuts: 1 };
+  function setSourceControlsInert(inert) {
+    var els = document.querySelectorAll('.toolbar .tbtn, .toolbar .tsel, .toolbar .tcolor, ' +
+      '.toolbar .tdrop-btn, .menu-dropdown .menu-item, .menu-tools .tbtn[data-cmd="undo"], ' +
+      '.menu-tools .tbtn[data-cmd="redo"]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el.id === 'sourceBtn' || SRC_KEEP_CMDS[el.getAttribute('data-cmd')]) continue;
+      if (inert) { el.setAttribute('aria-disabled', 'true'); el.setAttribute('tabindex', '-1'); }
+      else { el.removeAttribute('aria-disabled'); el.removeAttribute('tabindex'); }
+    }
   }
   // Make the raw-source textarea behave like a code editor: Tab / Shift+Tab indent instead
   // of leaving the field, and Esc returns to the WYSIWYG editor (applying any edits).
@@ -1985,15 +2042,15 @@
     tableTool = document.createElement('div');
     tableTool.className = 'rn-table-tool';
     tableTool.innerHTML =
-      '<button type="button" class="rn-tt-btn" data-tact="rowAbove" title="Insert row above"><svg class="ico" viewBox="0 0 16 16"><path d="M2 9.5h12M2 12.5h12"/><path d="M8 2v4M6 4h4"/></svg></button>' +
-      '<button type="button" class="rn-tt-btn" data-tact="rowBelow" title="Insert row below"><svg class="ico" viewBox="0 0 16 16"><path d="M2 3.5h12M2 6.5h12"/><path d="M8 10v4M6 12h4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn" data-tact="rowAbove" title="Insert row above"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M2 9.5h12M2 12.5h12"/><path d="M8 2v4M6 4h4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn" data-tact="rowBelow" title="Insert row below"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M2 3.5h12M2 6.5h12"/><path d="M8 10v4M6 12h4"/></svg></button>' +
       '<span class="rn-tt-sep"></span>' +
-      '<button type="button" class="rn-tt-btn" data-tact="colLeft" title="Insert column left"><svg class="ico" viewBox="0 0 16 16"><path d="M9.5 2v12M12.5 2v12"/><path d="M2 8h4M4 6v4"/></svg></button>' +
-      '<button type="button" class="rn-tt-btn" data-tact="colRight" title="Insert column right"><svg class="ico" viewBox="0 0 16 16"><path d="M3.5 2v12M6.5 2v12"/><path d="M10 8h4M12 6v4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn" data-tact="colLeft" title="Insert column left"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M9.5 2v12M12.5 2v12"/><path d="M2 8h4M4 6v4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn" data-tact="colRight" title="Insert column right"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M3.5 2v12M6.5 2v12"/><path d="M10 8h4M12 6v4"/></svg></button>' +
       '<span class="rn-tt-sep"></span>' +
-      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delRow" title="Delete row"><svg class="ico" viewBox="0 0 16 16"><path d="M2 6h12M2 10h12"/><path d="M6 13.5h4"/></svg></button>' +
-      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delCol" title="Delete column"><svg class="ico" viewBox="0 0 16 16"><path d="M6 2v12M10 2v12"/><path d="M12.5 6v4"/></svg></button>' +
-      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delTable" title="Delete table"><svg class="ico" viewBox="0 0 16 16"><path d="M3 4.5h10"/><path d="M5.5 4.5V3h5v1.5"/><path d="M4.2 4.5 5 13.5h6l.8-9"/></svg></button>';
+      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delRow" title="Delete row"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M2 6h12M2 10h12"/><path d="M6 13.5h4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delCol" title="Delete column"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M6 2v12M10 2v12"/><path d="M12.5 6v4"/></svg></button>' +
+      '<button type="button" class="rn-tt-btn rn-tt-del" data-tact="delTable" title="Delete table"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M3 4.5h10"/><path d="M5.5 4.5V3h5v1.5"/><path d="M4.2 4.5 5 13.5h6l.8-9"/></svg></button>';
     (document.querySelector('.editor-area') || document.body).appendChild(tableTool);
     tableTool.addEventListener('mousedown', function (ev) { ev.preventDefault(); });   // keep the caret
     tableTool.addEventListener('click', function (ev) {
@@ -2641,7 +2698,7 @@
 
   /* ---------- Icons for the dropdown menu items ---------- */
   (function initMenuIcons() {
-    function s(inner) { return '<svg class="ico" viewBox="0 0 16 16">' + inner + '</svg>'; }
+    function s(inner) { return '<svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16">' + inner + '</svg>'; }
     function g(txt, extra) { return '<span class="menu-ico-txt"' + (extra ? ' style="' + extra + '"' : '') + '>' + txt + '</span>'; }
     var ICONS = {
       undo: s('<path d="M4 7h6a3.5 3.5 0 1 1 0 7H6"/><path d="M6.5 4.5 4 7l2.5 2.5"/>'),
@@ -2789,11 +2846,54 @@
   editor.addEventListener('copy', function (ev) { onCopyEvent(ev, false); });
   editor.addEventListener('cut',  function (ev) { onCopyEvent(ev, true); });
 
+  /* ---------- Images: paste / drag-drop a picture, embedded as a data: URI ----------
+     Screenshots and copied pictures arrive as clipboard/drag FILES. We embed them as
+     base64 data: URIs so the note stays self-contained (works offline, nothing to hotlink).
+     Very large images are skipped so a note can't balloon unusably. */
+  var IMG_MAX_BYTES = 12 * 1024 * 1024;   // ~12 MB per image
+  function imageFilesFrom(dt) {
+    var out = [];
+    if (!dt) return out;
+    var files = dt.files;
+    if (files && files.length) {
+      for (var i = 0; i < files.length; i++) if (/^image\//i.test(files[i].type)) out.push(files[i]);
+    }
+    if (!out.length && dt.items) {                    // clipboard often exposes images via items
+      for (var j = 0; j < dt.items.length; j++) {
+        var it = dt.items[j];
+        if (it.kind === 'file' && /^image\//i.test(it.type)) {
+          var f = it.getAsFile();
+          if (f) out.push(f);
+        }
+      }
+    }
+    return out;
+  }
+  function insertImageFiles(files) {
+    editor.focus();
+    files.forEach(function (f) {
+      if (f.size > IMG_MAX_BYTES) { return; }         // too big to embed sanely
+      var reader = new FileReader();
+      reader.onload = function () {
+        var url = String(reader.result || '');
+        if (!/^data:image\//i.test(url)) return;
+        var live = window.getSelection();
+        if (savedRange && (!live.rangeCount || !editor.contains(live.anchorNode))) restoreSel();
+        document.execCommand('insertHTML', false, '<img src="' + url + '" alt="">');
+        ensureContent();
+        onChange();
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+
   editor.addEventListener('paste', function (ev) {
     if (pasteOverrideTimer) { clearTimeout(pasteOverrideTimer); pasteOverrideTimer = null; }
     var mode = pasteOverride; pasteOverride = null;   // 'plain' / 'format' / null (default)
     var cd = ev.clipboardData || window.clipboardData;
     if (!cd) return;
+    var imgFiles = imageFilesFrom(cd);                // a pasted screenshot / picture
+    if (imgFiles.length) { ev.preventDefault(); insertImageFiles(imgFiles); return; }
     var html = cd.getData('text/html');
     var text = cd.getData('text/plain');
     if ((html == null || html === '') && (text == null || text === '')) return;
@@ -2808,9 +2908,103 @@
     }
   });
 
+  // Drag-and-drop an image file straight into the note
+  editor.addEventListener('dragover', function (ev) {
+    if (imageFilesFrom(ev.dataTransfer).length) { ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; }
+  });
+  editor.addEventListener('drop', function (ev) {
+    var imgFiles = imageFilesFrom(ev.dataTransfer);
+    if (!imgFiles.length) return;
+    ev.preventDefault();
+    // drop the caret where the file landed, then embed
+    var r = document.caretRangeFromPoint ? document.caretRangeFromPoint(ev.clientX, ev.clientY) : null;
+    if (r && editor.contains(r.startContainer)) { var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); saveSel(); }
+    insertImageFiles(imgFiles);
+  });
+
+  /* ---------- Image selection · resize · delete ----------
+     Click an image to select it (accent outline + a corner handle); drag the handle to
+     resize (aspect ratio preserved); Delete/Backspace removes it; Esc or a click elsewhere
+     deselects. One resize = one undo step. */
+  var selectedImg = null, imgHandle = null, imgResize = null;
+  function buildImgHandle() {
+    imgHandle = document.createElement('div');
+    imgHandle.className = 'rn-img-handle';
+    imgHandle.setAttribute('aria-hidden', 'true');
+    imgHandle.title = 'Drag to resize';
+    editorArea.appendChild(imgHandle);
+    imgHandle.addEventListener('mousedown', startImgResize);
+  }
+  function positionImgHandle() {
+    if (!selectedImg || !imgHandle) return;
+    var ir = selectedImg.getBoundingClientRect(), ar = editorArea.getBoundingClientRect();
+    if (ir.bottom < ar.top + 2 || ir.top > ar.bottom - 2) { imgHandle.classList.remove('show'); return; }
+    imgHandle.classList.add('show');
+    imgHandle.style.left = (ir.right - ar.left - 7) + 'px';
+    imgHandle.style.top = (ir.bottom - ar.top - 7) + 'px';
+  }
+  function selectImage(img) {
+    if (selectedImg !== img) { deselectImage(); selectedImg = img; img.classList.add('rn-img-sel'); }
+    if (!imgHandle) buildImgHandle();
+    positionImgHandle();
+  }
+  function deselectImage() {
+    if (selectedImg) selectedImg.classList.remove('rn-img-sel');
+    selectedImg = null;
+    if (imgHandle) imgHandle.classList.remove('show');
+  }
+  function deleteSelectedImage() {
+    if (!selectedImg) return false;
+    var img = selectedImg, host = img.parentNode;
+    deselectImage();
+    if (img.parentNode) img.parentNode.removeChild(img);
+    if (host && host !== editor && host.nodeType === 1 && !host.firstChild) host.appendChild(document.createElement('br'));
+    ensureContent();
+    onChange();
+    return true;
+  }
+  function startImgResize(ev) {
+    if (!selectedImg) return;
+    ev.preventDefault(); ev.stopPropagation();
+    imgResize = { x: ev.clientX, w: selectedImg.offsetWidth, max: editor.clientWidth - 32 };
+    window.addEventListener('mousemove', onImgResizeMove, true);
+    window.addEventListener('mouseup', onImgResizeUp, true);
+  }
+  function onImgResizeMove(ev) {
+    if (!imgResize || !selectedImg) return;
+    ev.preventDefault();
+    var w = Math.max(40, Math.min(imgResize.max, imgResize.w + (ev.clientX - imgResize.x)));
+    selectedImg.style.width = Math.round(w) + 'px';
+    selectedImg.style.height = 'auto';                 // keep aspect ratio
+    positionImgHandle();
+  }
+  function onImgResizeUp() {
+    window.removeEventListener('mousemove', onImgResizeMove, true);
+    window.removeEventListener('mouseup', onImgResizeUp, true);
+    if (imgResize) { imgResize = null; onChange(); }   // record one undo entry
+  }
+  editor.addEventListener('click', function (ev) {
+    if (ev.target && ev.target.tagName === 'IMG') { selectImage(ev.target); }
+    else if (selectedImg) deselectImage();
+  });
+  document.addEventListener('mousedown', function (ev) {
+    if (!selectedImg) return;
+    if (ev.target === selectedImg || (ev.target.closest && ev.target.closest('.rn-img-handle'))) return;
+    if (!(ev.target.closest && ev.target.closest('#editor'))) deselectImage();
+  }, true);
+
   /* ---------- Keyboard shortcuts (Word-like) & Tab ---------- */
   editor.addEventListener('keydown', function (ev) {
     var mod = ev.ctrlKey || ev.metaKey;
+
+    // A selected image: Delete/Backspace removes it, Esc deselects, any other key deselects
+    // and falls through to normal editing.
+    if (selectedImg) {
+      if (ev.key === 'Backspace' || ev.key === 'Delete') { ev.preventDefault(); deleteSelectedImage(); return; }
+      if (ev.key === 'Escape') { ev.preventDefault(); deselectImage(); return; }
+      if (!mod && ev.key.length === 1) deselectImage();     // start typing → drop the selection
+      else if (ev.key.indexOf('Arrow') === 0) deselectImage();
+    }
 
     // Multi-cell selection: Esc clears it, Delete/Backspace empties the cells,
     // and typing a character collapses back to normal single-caret editing.
@@ -2844,6 +3038,7 @@
     // Enter on a "---" / "***" / "___" line → horizontal rule; else auto-link a URL just typed
     if (ev.key === 'Enter' && !ev.shiftKey && !mod && !ev.altKey) {
       if (maybeHorizontalRule()) { ev.preventDefault(); return; }
+      if (handleHeadingEnter()) { ev.preventDefault(); return; }   // heading → normal text on Enter
       linkifyBeforeCaret();
       return;
     }
@@ -3027,6 +3222,35 @@
     editor.focus();
   }
   function placeCaretAtEnd(el) { placeCaret(el, true); }
+
+  // Word-like Enter behaviour for headings: pressing Enter at the END of a heading starts a
+  // NORMAL paragraph (you rarely want two stacked headings), and Enter on an EMPTY heading
+  // just drops it back to normal text. Splitting a heading in the middle is left to the
+  // browser (both halves stay a heading). Returns true when it handled the key.
+  function handleHeadingEnter() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !sel.isCollapsed) return false;
+    var block = currentBlock();
+    if (!block || !/^H[1-6]$/.test(block.tagName)) return false;
+    if (!/\S/.test(block.textContent)) {                    // empty heading → become a paragraph
+      var p0 = document.createElement('p');
+      p0.appendChild(document.createElement('br'));
+      block.parentNode.replaceChild(p0, block);
+      placeCaret(p0, false);
+      onChange();
+      return true;
+    }
+    var r = sel.getRangeAt(0).cloneRange();                 // is the caret at the very end?
+    r.setEndAfter(block.lastChild || block);
+    var rest = r.cloneContents();
+    if (/\S/.test(rest.textContent) || rest.querySelector('img,table')) return false;
+    var p = document.createElement('p');
+    p.appendChild(document.createElement('br'));
+    block.parentNode.insertBefore(p, block.nextSibling);
+    placeCaret(p, false);
+    onChange();
+    return true;
+  }
 
   // The top-level blocks the operation targets (the selection's span, else the caret line).
   function opBlocks() {
@@ -3217,9 +3441,17 @@
     histReset();                        // a freshly loaded note starts a new undo history
     refresh();
   }
+  // In source mode the live edits live in the textarea, not the (stale) WYSIWYG editor —
+  // serialise the raw source so an autosave / note-switch never loses them.
+  function sourceToHtml() {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = sourceView.value;
+    stripPrettyWhitespace(tmp);
+    return tmp.innerHTML;
+  }
   function save() {
     if (!componentRelay || !workingNote) return;
-    var html = editor.innerHTML;
+    var html = sourceOn ? sourceToHtml() : editor.innerHTML;
     lastSavedHTML = html;
     setSaveState(true);
     if (saveStateTimer) clearTimeout(saveStateTimer);
@@ -3276,6 +3508,20 @@
     else if (mq.addListener) mq.addListener(onWrapMq);   // older engines
   });
   try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+
+  // Accessibility: give every icon-only control a screen-reader name from its tooltip, and
+  // hide the decorative SVG glyphs so assistive tech reads the label, not the path data.
+  function initA11y() {
+    var titled = document.querySelectorAll('button[title]');
+    for (var i = 0; i < titled.length; i++) {
+      if (!titled[i].getAttribute('aria-label')) titled[i].setAttribute('aria-label', titled[i].getAttribute('title'));
+    }
+    var icons = document.querySelectorAll('svg.ico, .menu-check');
+    for (var j = 0; j < icons.length; j++) icons[j].setAttribute('aria-hidden', 'true');
+    if (sourceView) sourceView.setAttribute('aria-label', 'HTML source code');
+  }
+  initA11y();
+
   applyToolbar();
   ensureContent();
   histReset();                          // seed the undo history with the initial content

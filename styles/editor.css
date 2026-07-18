@@ -1005,6 +1005,37 @@ a.about-row:hover { background: var(--np-accent-soft); }
 }
 .doc.wrap { white-space: pre-wrap; }   /* Word Wrap: only wrap when the line is full */
 
+/* Embedded (pasted / dropped) images */
+.doc img {
+  max-width: 100%;
+  height: auto;
+  vertical-align: bottom;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+  cursor: default;
+}
+.doc img::selection { background: rgba(56, 111, 175, .35); }
+.doc img.rn-img-sel {
+  outline: 2.5px solid var(--np-accent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px rgba(47, 111, 219, .15);
+}
+/* Corner drag handle for resizing the selected image (lives in .editor-area) */
+.rn-img-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  background: var(--np-accent);
+  border: 2px solid #fff;
+  border-radius: 3px;
+  cursor: nwse-resize;
+  z-index: 30;
+  display: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+}
+.rn-img-handle.show { display: block; }
+
 /* Each block starts flush-left (x=0); horizontal padding and indentation use padding
    so the highlight background covers the FULL width, including a leading tab/indent. */
 .doc > * {

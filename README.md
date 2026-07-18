@@ -24,18 +24,23 @@ A fast, beautiful **WYSIWYG editor** for [Standard Notes](https://standardnotes.
 - 🪄 **True WYSIWYG** — bold looks bold, links look like links. No raw `**markdown**`.
 - 🧰 **Word‑like toolbar** — style dropdown (Normal / **H1–H6** / Quote), font, size, **B / I / U / S**, inline code, and more, all on **one clean line**.
 - ⚡ **Markdown auto‑format** — type `# `, `- `, `1. `, `> `, `[] ` then space, or `---` then Enter, and the line becomes a heading / list / quote / **checklist** / divider instantly.
+- 🖼️ **Images** — **paste** or **drag‑and‑drop** a picture; it's embedded in the note (offline‑safe, no hotlinks). **Click to select**, **drag the corner to resize**, `Delete` to remove.
+- 🧑‍💻 **Edit the HTML source** — toggle **View → HTML source** (or the `</>` toolbar button) to edit the raw HTML directly: **pretty‑printed** and **syntax‑highlighted**, not one minified line.
+- 🧱 **Code blocks** — fenced blocks with **language syntax highlighting** and a one‑click copy button.
 - ☑️ **Checklists** — tick‑off task lists; click the box to mark done.
 - 🧮 **Line tools** — duplicate (`Ctrl+Shift+D`), move (`Alt+↑/↓`) and delete (`Ctrl+Shift+K`) lines like VS Code.
 - 🔗 **Auto‑link URLs** — paste or type a link and it turns clickable automatically.
 - 🎨 **Text & highlight colors** — a **Google‑Sheets‑style palette** plus any custom color.
 - 🔢 **Line numbers + current‑line highlight** — a code‑editor feel for your notes.
 - 🗺️ **Minimap** — a VS Code‑style overview on the right; click or drag to jump anywhere. Toggle in **View → Minimap**.
+- ↩️ **Reliable undo/redo** — a whole multi‑line indent, paste or source edit undoes in **one step** (`Ctrl+Z` / `Ctrl+Y`).
 - ⌨️ **Keyboard shortcuts everyone knows** — `Ctrl+B/I/U`, `Ctrl+Alt+1…6` for headings, `Ctrl+L/E/R` to align, `Ctrl+K` for links, `F4` to repeat the last action.
 - 🔗 **Smart links** — insert/edit with a popup; **Ctrl/Cmd‑click** to open.
 - 🧬 **Multiple cursors (Sublime‑style)** — `Shift+Alt+↑/↓` to add a caret above/below, **Alt‑click** to drop one anywhere, then type / delete / arrow‑select on every line at once.
 - 🔍 **Find & Replace (`Ctrl+F` / `Ctrl+H`)** — jump between matches with **Match case / Whole word / Regex** options, and **“Select all”** (`Alt+Enter`) to turn every match into a caret and edit them together.
 - 📊 **Live status bar** — word / character / line counts plus a **Saved / Saving…** indicator.
 - ↹ **Tab indentation** (single line or a whole block) and a **Word Wrap** toggle.
+- ♿ **Accessible** — keyboard focus rings, ARIA labels on every control, and screen‑reader‑friendly markup.
 - 🌗 **Clean light theme**, thoughtfully designed and responsive.
 - 🔒 **Private by design** — 100% local, static HTML/CSS/JS. No trackers, no network calls, no build step.
 
@@ -106,6 +111,9 @@ New notes will now use RichNote out of the box. Existing notes keep their curren
 
 `Ctrl` = `Cmd` on macOS.
 
+**Images:** paste or drag a picture in → **click** it to select → **drag the corner** to resize → `Delete` to remove.
+**HTML source:** **View → HTML source** or the `</>` toolbar button; edit the raw HTML and press `Esc` (or toggle again) to return.
+
 ---
 
 ## 💛 Support the developer
@@ -147,18 +155,20 @@ RichNote/
 ├── ext.json                  # Component manifest — packaged (bundles RichNote.zip)
 ├── ext.online.json           # Component manifest — online only (hosted, no zip)
 ├── ext.dev.json              # DEV manifest — loads from http://localhost:8080
-├── index.html                # Editor page (menu, toolbar, WYSIWYG area)
-├── styles/editor.css         # All styling (light theme, toolbar, dialogs)
+├── index.html                # Editor page (menu, toolbar, WYSIWYG area, HTML source view)
+├── styles/editor.css         # All styling (light theme, toolbar, dialogs, images)
 ├── js/editor.js              # Editor logic + ComponentRelay integration
 ├── js/multicursor.js         # Multi-cursor & Find (Sublime-style)
+├── js/minimap.js             # VS Code-style minimap
 ├── vendor/component-relay.js # Standard Notes bridge library
-├── img/                   # Screenshot + donate QR
+├── vendor/highlight.min.js   # Syntax highlighting (code blocks + HTML source)
+├── img/                      # Screenshot + donate QR
 └── LICENSE                   # MIT
 ```
 
 ## 🛠️ Tech
 
-Plain **HTML / CSS / JavaScript** — no framework, no build. Formatting is powered by the browser's `contenteditable` and the official [`@standardnotes/component-relay`](https://www.npmjs.com/package/@standardnotes/component-relay) bridge for reading/saving the note.
+Plain **HTML / CSS / JavaScript** — no framework, no build. Formatting is powered by the browser's `contenteditable`, with [highlight.js](https://highlightjs.org/) for code‑block & HTML‑source syntax colours and the official [`@standardnotes/component-relay`](https://www.npmjs.com/package/@standardnotes/component-relay) bridge for reading/saving the note.
 
 ---
 

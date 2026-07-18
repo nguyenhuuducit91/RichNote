@@ -365,23 +365,23 @@
     findBar = document.createElement('div');
     findBar.className = 'mc-find';
     findBar.innerHTML =
-      '<button type="button" class="mc-find-toggle" data-act="toggle" title="Toggle Replace"><svg class="ico" viewBox="0 0 16 16"><path d="M6 5l3 3-3 3"/></svg></button>' +
+      '<button type="button" class="mc-find-toggle" data-act="toggle" title="Toggle Replace"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M6 5l3 3-3 3"/></svg></button>' +
       '<div class="mc-find-cols">' +
         '<div class="mc-find-row">' +
-          '<span class="mc-find-ico"><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></span>' +
+          '<span class="mc-find-ico"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.3"/><path d="M10.2 10.2 14 14"/></svg></span>' +
           '<input type="text" class="mc-find-input" placeholder="Find in note…" spellcheck="false" />' +
           '<span class="mc-find-count">0/0</span>' +
           '<button type="button" class="mc-find-opt" data-act="optCase" title="Match case">Aa</button>' +
           '<button type="button" class="mc-find-opt" data-act="optWord" title="Whole word"><span class="mc-opt-word">ab</span></button>' +
           '<button type="button" class="mc-find-opt" data-act="optRegex" title="Use regular expression">.*</button>' +
           '<span class="mc-find-sep"></span>' +
-          '<button type="button" class="mc-find-btn" data-act="prev" title="Previous (Shift+Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button>' +
-          '<button type="button" class="mc-find-btn" data-act="next" title="Next (Enter)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>' +
+          '<button type="button" class="mc-find-btn" data-act="prev" title="Previous (Shift+Enter)"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg></button>' +
+          '<button type="button" class="mc-find-btn" data-act="next" title="Next (Enter)"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>' +
           '<button type="button" class="mc-find-btn mc-find-all" data-act="all" title="Select all matches (Alt+Enter)">Select all</button>' +
-          '<button type="button" class="mc-find-btn mc-find-close" data-act="close" title="Close (Esc)"><svg class="ico" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>' +
+          '<button type="button" class="mc-find-btn mc-find-close" data-act="close" title="Close (Esc)"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>' +
         '</div>' +
         '<div class="mc-find-row mc-replace-row">' +
-          '<span class="mc-find-ico"><svg class="ico" viewBox="0 0 16 16"><path d="M3 6.5A4.5 4.5 0 0 1 11 4l1.6 1.6"/><path d="M12.8 3v3h-3"/><path d="M13 9.5A4.5 4.5 0 0 1 5 12l-1.6-1.6"/><path d="M3.2 13v-3h3"/></svg></span>' +
+          '<span class="mc-find-ico"><svg class="ico" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M3 6.5A4.5 4.5 0 0 1 11 4l1.6 1.6"/><path d="M12.8 3v3h-3"/><path d="M13 9.5A4.5 4.5 0 0 1 5 12l-1.6-1.6"/><path d="M3.2 13v-3h3"/></svg></span>' +
           '<input type="text" class="mc-replace-input" placeholder="Replace with…" spellcheck="false" />' +
           '<span class="mc-find-sep"></span>' +
           '<button type="button" class="mc-find-btn" data-act="replace" title="Replace (Enter)">Replace</button>' +
