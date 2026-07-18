@@ -57,6 +57,9 @@
   var codeLang    = document.getElementById('codeLang');
   var codeCopy    = document.getElementById('codeCopy');
   var sourceView  = document.getElementById('sourceView');
+  var sourceWrap  = document.getElementById('sourceWrap');
+  var sourceHl    = document.getElementById('sourceHl');
+  var sourceHlCode = sourceHl ? sourceHl.querySelector('code') : null;
 
   /* Default color palette (Google Sheets style) */
   var PALETTE = [
@@ -1684,7 +1687,8 @@
           if (SRC_VOID[tag]) { out.push(pad(depth) + srcOpenTag(n)); continue; }
           var close = '</' + tag.toLowerCase() + '>';
           if (SRC_VERBATIM[tag] || !srcHasBlockChild(n)) {        // keep inline content on one line
-            out.push(pad(depth) + srcOpenTag(n) + n.innerHTML.trim() + close);
+            // don't trim — the editor uses white-space:pre, so leading/trailing spaces matter
+            out.push(pad(depth) + srcOpenTag(n) + n.innerHTML + close);
           } else {
             out.push(pad(depth) + srcOpenTag(n));
             walk(n, depth + 1);
@@ -1717,7 +1721,7 @@
     for (var k = 0; k < kill.length; k++) if (kill[k].parentNode) kill[k].parentNode.removeChild(kill[k]);
   }
 
-  var sourceOn = false;
+  var sourceOn = false, sourceOrig = '';
   function applySource() {
     var tmp = document.createElement('div');
     tmp.innerHTML = sourceView.value;
@@ -1737,23 +1741,85 @@
     sourceOn = on;
     document.body.classList.toggle('source-mode', on);
     setActive('source', on);
-    var item = document.querySelector('.menu-item[data-cmd="source"] .menu-check');
-    if (item) item.textContent = on ? '✓' : '';
+    var item = document.getElementById('sourceItem');   // .checked reveals the ✓ (like Word Wrap)
+    if (item) item.classList.toggle('checked', on);
+    var btn = document.getElementById('sourceBtn');
+    if (btn) btn.title = on ? 'Back to editor (Esc)' : 'HTML source — edit the raw HTML';
+    var mode = document.querySelector('.st-mode');
+    if (mode) mode.textContent = on ? 'HTML' : 'RTF';
     if (on) {
-      sourceView.value = formatHtml(editor.innerHTML);
-      editor.style.display = 'none';
-      sourceView.style.display = 'block';
+      sourceOrig = formatHtml(editor.innerHTML);
+      sourceView.value = sourceOrig;
+      if (sourceWrap) sourceWrap.classList.toggle('wrap', wrapOn);   // follow the Word-Wrap setting
+      renderSourceHL();
       sourceView.focus();
+      sourceView.setSelectionRange(0, 0);
+      sourceView.scrollTop = 0;
+      syncSourceScroll();
     } else {
-      sourceView.style.display = 'none';
-      editor.style.display = '';
       editor.focus();
     }
   }
-  function toggleSource() {
-    if (sourceOn) { applySource(); setSourceView(false); }
-    else setSourceView(true);
+  // Repaint the highlight layer from the textarea's current text (hljs XML == HTML grammar).
+  function renderSourceHL() {
+    if (!sourceHlCode) return;
+    var v = sourceView.value;
+    var out;
+    if (HLJS && HLJS.getLanguage && HLJS.getLanguage('xml')) {
+      try { out = HLJS.highlight(v, { language: 'xml', ignoreIllegals: true }).value; }
+      catch (e) { out = escapeHtml(v); }
+    } else { out = escapeHtml(v); }
+    sourceHlCode.innerHTML = out + '\n';   // trailing NL keeps the last line aligned under the caret
+    syncSourceScroll();
   }
+  function syncSourceScroll() {
+    if (!sourceHl) return;
+    sourceHl.scrollTop = sourceView.scrollTop;
+    sourceHl.scrollLeft = sourceView.scrollLeft;
+  }
+  if (sourceView) {
+    sourceView.addEventListener('input', renderSourceHL);
+    sourceView.addEventListener('scroll', syncSourceScroll);
+  }
+  function toggleSource() {
+    if (sourceOn) {
+      if (sourceView.value !== sourceOrig) applySource();     // only re-parse if actually edited
+      setSourceView(false);
+    } else setSourceView(true);
+  }
+  // Make the raw-source textarea behave like a code editor: Tab / Shift+Tab indent instead
+  // of leaving the field, and Esc returns to the WYSIWYG editor (applying any edits).
+  if (sourceView) sourceView.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') { ev.preventDefault(); toggleSource(); return; }
+    if (ev.key === 'Tab') {
+      ev.preventDefault();
+      var s = sourceView.selectionStart, e = sourceView.selectionEnd, v = sourceView.value;
+      if (s === e && !ev.shiftKey) {                          // simple caret: insert two spaces
+        sourceView.value = v.slice(0, s) + '  ' + v.slice(e);
+        sourceView.selectionStart = sourceView.selectionEnd = s + 2;
+        renderSourceHL();
+        return;
+      }
+      // line-wise (Shift+)Tab over every line the selection touches (incl. a bare caret)
+      var ls = v.lastIndexOf('\n', s - 1) + 1;
+      var searchFrom = (e > s && v.charAt(e - 1) === '\n') ? e - 1 : e;   // don't grab the next line
+      var nl = v.indexOf('\n', searchFrom), le = nl === -1 ? v.length : nl;
+      var lines = v.slice(ls, le).split('\n'), delta = 0, firstDelta = 0;
+      lines = lines.map(function (ln, i) {
+        if (ev.shiftKey) {
+          var m = /^( {1,2}|\t)/.exec(ln);
+          if (m) { delta -= m[0].length; if (i === 0) firstDelta = -m[0].length; return ln.slice(m[0].length); }
+          return ln;
+        }
+        delta += 2; if (i === 0) firstDelta = 2; return '  ' + ln;
+      });
+      sourceView.value = v.slice(0, ls) + lines.join('\n') + v.slice(le);
+      var newStart = Math.max(ls, s + firstDelta);
+      sourceView.selectionStart = newStart;
+      sourceView.selectionEnd = Math.max(newStart, e + delta);
+      renderSourceHL();
+    }
+  });
 
   /* ============================================================
      TABLES
@@ -2232,6 +2298,9 @@
         case 'shortcuts': openShortcuts(); return;
       }
     }
+    // While editing raw HTML source, only the Source toggle is meaningful — ignore
+    // formatting/undo/paste so they can't quietly mutate the hidden WYSIWYG editor.
+    if (sourceOn && cmd !== 'source') return;
     editor.focus();
     // On touch devices we blur the editor when opening a menu (to hide the
     // keyboard), which drops the live selection — restore it before formatting.

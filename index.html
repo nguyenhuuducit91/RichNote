@@ -92,7 +92,7 @@
           <button class="menu-item" type="button" data-cmd="wrap" id="wrapItem"><span class="menu-check">✓</span><span class="menu-label">Word Wrap</span><span class="menu-key"></span></button>
           <button class="menu-item" type="button" data-cmd="minimap" id="minimapItem"><span class="menu-check">✓</span><span class="menu-label">Minimap</span><span class="menu-key"></span></button>
           <div class="menu-sep"></div>
-          <button class="menu-item" type="button" data-cmd="source" id="sourceItem"><span class="menu-check"></span><span class="menu-label">HTML source</span><span class="menu-key"></span></button>
+          <button class="menu-item" type="button" data-cmd="source" id="sourceItem"><span class="menu-check">✓</span><span class="menu-ico"><svg class="ico" viewBox="0 0 16 16"><path d="M5.5 5 2.5 8l3 3"/><path d="M10.5 5 13.5 8l-3 3"/><path d="M9 3.5 7 12.5"/></svg></span><span class="menu-label">HTML source</span><span class="menu-key"></span></button>
         </div>
       </div>
 
@@ -304,9 +304,13 @@
       <div id="editor" class="doc" contenteditable="true" spellcheck="false"
            role="textbox" aria-multiline="true" aria-label="Note content"
            data-placeholder="Start writing…"></div>
-      <!-- Raw HTML source view: editable, pretty-printed; toggled from View ▸ HTML source -->
-      <textarea id="sourceView" class="source-view" spellcheck="false" autocomplete="off"
-                autocapitalize="off" wrap="off" aria-label="HTML source"></textarea>
+      <!-- Raw HTML source view: editable, pretty-printed, syntax-highlighted. A highlighted
+           <pre> sits behind a transparent <textarea> (which owns the caret/editing). -->
+      <div class="source-wrap" id="sourceWrap">
+        <pre class="source-hl" id="sourceHl" aria-hidden="true"><code class="hljs"></code></pre>
+        <textarea id="sourceView" class="source-view" spellcheck="false" autocomplete="off"
+                  autocapitalize="off" autocorrect="off" wrap="off" aria-label="HTML source"></textarea>
+      </div>
       <!-- Code-block toolbar: language picker + copy, revealed on hover over a code block -->
       <div class="code-bar" id="codeBar" aria-hidden="true">
         <select class="code-lang" id="codeLang" title="Code language"></select>

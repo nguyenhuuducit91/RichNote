@@ -870,30 +870,98 @@ a.about-row:hover { background: var(--np-accent-soft); }
   position: relative;              /* anchor the Find bar */
 }
 
-/* Raw HTML source view — hidden until View ▸ HTML source is toggled on */
-.source-view {
-  display: none;
+/* Raw HTML source view — a syntax-highlighted <pre> behind a transparent <textarea>.
+   The two MUST share identical typography + box metrics so the coloured text lines up
+   exactly under the (invisible) text the caret edits. */
+.source-wrap {
+  display: none;                       /* revealed by .source-mode */
   flex: 1 1 auto;
   min-width: 0;
-  width: 100%;
-  box-sizing: border-box;
-  border: 0;
-  outline: none;
-  resize: none;
-  padding: var(--np-pad-y) 16px 40px;
+  position: relative;
+  overflow: hidden;
   background: var(--np-bg);
-  color: var(--np-fg);
+}
+.source-mode .source-wrap { display: block; }
+.source-hl, .source-view {
+  margin: 0;
+  border: 0;
+  box-sizing: border-box;
+  padding: var(--np-pad-y) 16px 40px;
   font-family: var(--np-mono);
   font-size: 13px;
   line-height: 1.55;
+  letter-spacing: 0;
   tab-size: 2;
+  -moz-tab-size: 2;
   white-space: pre;
-  overflow: auto;
+  word-wrap: normal;
+  overflow-wrap: normal;
 }
+.source-hl {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;                    /* scrolled programmatically to follow the textarea */
+  pointer-events: none;
+  color: var(--np-fg);
+  z-index: 1;
+}
+.source-hl code {
+  display: block;
+  font: inherit;
+  padding: 0;
+  background: none;
+  white-space: inherit;
+  color: inherit;
+}
+.source-view {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  outline: none;
+  overflow: auto;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;   /* hide the raw glyphs in WebKit/Blink */
+  caret-color: var(--np-fg);               /* …but keep a visible caret */
+  z-index: 2;
+}
+.source-view::selection { background: rgba(56, 111, 175, .28); }
+.source-view::-moz-selection { background: rgba(56, 111, 175, .28); }
+.source-wrap.wrap .source-hl,
+.source-wrap.wrap .source-view { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; }
+/* Light-theme HTML token colours (GitHub-like) for the source view */
+.source-hl .hljs-comment { color: #6a737d; font-style: italic; }
+.source-hl .hljs-tag     { color: #6a737d; }   /* the < > </ punctuation */
+.source-hl .hljs-name    { color: #22863a; }   /* element name */
+.source-hl .hljs-attr    { color: #6f42c1; }   /* attribute name */
+.source-hl .hljs-string  { color: #032f62; }   /* attribute value */
+.source-hl .hljs-symbol  { color: #e36209; }   /* &entities; */
+.source-hl .hljs-meta    { color: #6a737d; }   /* <!doctype>, comments-ish */
 /* While editing source, the gutter/minimap/code-bar are meaningless — hide them */
 .source-mode .gutter,
 .source-mode .code-bar,
 .source-mode .minimap { display: none !important; }
+.source-mode #editor { display: none !important; }
+/* …and dim the formatting controls (they don't apply to raw source), but keep the
+   Source toggle itself fully interactive so the user can switch back. */
+.source-mode .toolbar .tbtn,
+.source-mode .toolbar .tsel,
+.source-mode .toolbar .tcolor,
+.source-mode .toolbar .tdrop-btn { opacity: .38; pointer-events: none; }
+.source-mode #sourceBtn { opacity: 1; pointer-events: auto; }
+.source-mode #st-pos, .source-mode #st-sel { visibility: hidden; }   /* Ln/Col N/A for source */
+/* Match the menu bar to the toolbar: the same editor commands are inert in source mode.
+   Keep the ones that still make sense — the Source toggle itself, undo/redo (dimmed too),
+   and Help — so the menus never look clickable when they aren't. */
+.source-mode .menu-dropdown .menu-item,
+.source-mode .menu-tools .tbtn[data-cmd="undo"],
+.source-mode .menu-tools .tbtn[data-cmd="redo"] { opacity: .38; pointer-events: none; }
+.source-mode .menu-item[data-cmd="source"],
+.source-mode .menu-item[data-cmd="about"],
+.source-mode .menu-item[data-cmd="donate"],
+.source-mode .menu-item[data-cmd="shortcuts"] { opacity: 1; pointer-events: auto; }
 
 /* Line-number gutter — numbers are absolutely positioned by each block's offsetTop */
 .gutter {
